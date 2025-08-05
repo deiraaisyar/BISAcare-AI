@@ -66,15 +66,15 @@ def buat_surat_aju_banding_pdf(
     print(f"Surat berhasil dibuat: {nama_file_output}")
 
 # Contoh penggunaan:
-if __name__ == "__main__":
-    buat_surat_aju_banding_pdf(
-        nama="Rina Vina Wijaya",
-        no_polis="0208202400316",
-        alamat="Permata Raya Sukodono e4-18, Sidoarjo",
-        no_telepon="0812-8999-9628",
-        tanggal_pengajuan="26 Mei 2025",
-        nomor_klaim="007/KLAIM-ASM SBY/7/2025",
-        perihal_klaim="kerusakan kendaraan yaris 2019 dengan nopol L 1637 ZA",
-        alasan_penolakan="1. Estimasi biaya yang hanya mencapai 72%<br/>2. Keterlambatan pajak",
-        alasan_banding="Penolakan dirasa sepihak karena tidak menjelaskan kerusakan dan pajak secara rinci. Keterlambatan pajak disebabkan oleh status BPKB yang berada di oto finance, bukan kelalaian pribadi."
-    )
+# if __name__ == "__main__":
+#     buat_surat_aju_banding_pdf(
+#         nama="Rina Vina Wijaya",
+#         no_polis="0208202400316",
+#         alamat="Permata Raya Sukodono e4-18, Sidoarjo",
+#         no_telepon="0812-8999-9628",
+#         tanggal_pengajuan="26 Mei 2025",
+#         nomor_klaim="007/KLAIM-ASM SBY/7/2025",
+#         perihal_klaim="kerusakan kendaraan yaris 2019 dengan nopol L 1637 ZA",
+#         alasan_penolakan="1. Estimasi biaya yang hanya mencapai 72%<br/>2. Keterlambatan pajak",
+#         alasan_banding="Penolakan dirasa sepihak karena tidak menjelaskan kerusakan dan pajak secara rinci. Keterlambatan pajak disebabkan oleh status BPKB yang berada di oto finance, bukan kelalaian pribadi."
+#     )

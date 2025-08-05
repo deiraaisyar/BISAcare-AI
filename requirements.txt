@@ -7,5 +7,13 @@ reportlab
 python-multipart
 torch
 torchaudio
-git+https://github.com/openai/whisper.git
-ffmpeg-python
+openai-whisper
+SpeechRecognition
+pydub
+langchain
+langchain-community
+langchain-text-splitters
+pypdf2
+faiss-cpu
+sentence-transformers
+chromadb

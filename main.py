@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException, File, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history
+from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history, get_rag_status
 from features.surat_aju_banding.surat_aju_banding import buat_surat_aju_banding_pdf
 from features.keluhanmu_bisa_diklaim.keluhanmu_bisa_diklaim import analyze_health_complaint, analyze_health_complaint_from_audio
 import os
@@ -10,7 +10,7 @@ import tempfile
 import shutil
 from typing import Optional
 
-app = FastAPI(title="BISAcare")
+app = FastAPI(title="BISAcare - AI-Powered Insurance Assistant")
 
 class Query(BaseModel):
     question: str
@@ -29,31 +29,45 @@ class SuratAjuBandingRequest(BaseModel):
 
 class KeluhanRequest(BaseModel):
     keluhan_text: str
-    metode_input: str = "text"  # "text" atau "voice"
+    metode_input: str = "text"
+
+# ============= BISABOT ENDPOINTS (with integrated RAG) =============
 
 @app.post("/bisabot")
 async def chat(query: Query):
+    """Chat dengan BISAbot yang sudah terintegrasi dengan RAG"""
     response = ask_bisabot(query.question)
     return {"answer": response}
 
 @app.get("/bisabot/history")
 async def get_history():
+    """Get chat history"""
     history = get_chat_history()
     return {"history": history}
 
 @app.delete("/bisabot/history")
 async def clear_history():
+    """Clear chat history"""
     clear_chat_history()
     return {"message": "Chat history cleared successfully"}
+
+@app.get("/bisabot/status")
+async def get_status():
+    """Get BISAbot and RAG status"""
+    rag_status = get_rag_status()
+    return {
+        "bisabot": "online",
+        "rag": rag_status
+    }
+
+# ============= EXISTING ENDPOINTS =============
 
 @app.post("/surat_aju_banding")
 async def buat_surat_banding(request: SuratAjuBandingRequest):
     try:
-        # Generate unique filename
         unique_id = str(uuid.uuid4())[:8]
         nama_file = f"surat_aju_banding_{unique_id}.pdf"
         
-        # Create the PDF
         buat_surat_aju_banding_pdf(
             nama=request.nama,
             no_polis=request.no_polis,
@@ -68,7 +82,6 @@ async def buat_surat_banding(request: SuratAjuBandingRequest):
             nama_file_output=nama_file
         )
         
-        # Check if file was created successfully
         if not os.path.exists(nama_file):
             raise HTTPException(status_code=500, detail="Gagal membuat file PDF")
         
@@ -83,16 +96,10 @@ async def buat_surat_banding(request: SuratAjuBandingRequest):
 
 @app.post("/keluhanmu_bisa_diklaim")
 async def analisis_keluhan(request: KeluhanRequest):
-    """
-    Endpoint untuk menganalisis keluhan kesehatan
-    Input: text keluhan
-    Output: persentase klaim + kemungkinan diagnosis
-    """
     try:
         if not request.keluhan_text.strip():
             raise HTTPException(status_code=400, detail="Keluhan tidak boleh kosong")
         
-        # Analisis keluhan menggunakan AI
         result = analyze_health_complaint(request.keluhan_text)
         
         return {
@@ -114,13 +121,8 @@ async def analisis_keluhan(request: KeluhanRequest):
 
 @app.post("/keluhanmu_bisa_diklaim/voice")
 async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
-    """
-    Endpoint untuk upload audio keluhan menggunakan OpenAI Whisper
-    Supported formats: mp3, wav, m4a, flac, ogg
-    """
     try:
-        # Validate file type
-        allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm']
+        allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm', '.mp4']
         file_extension = os.path.splitext(audio_file.filename)[1].lower()
         
         if file_extension not in allowed_extensions:
@@ -129,23 +131,20 @@ async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
                 detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
             )
         
-        # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
             shutil.copyfileobj(audio_file.file, temp_file)
             temp_file_path = temp_file.name
         
         try:
-            # Analyze audio file
             result = analyze_health_complaint_from_audio(temp_file_path)
-            
-            # Get transcribed text
             transcribed_text = result.get("transcribed_text", "")
             
             return {
                 "status": "success",
                 "keluhan_input": transcribed_text,
-                "metode_input": "voice",
+                "metode_input": "voice" if file_extension != '.mp4' else "video",
                 "original_filename": audio_file.filename,
+                "file_type": file_extension,
                 "transcribed_text": transcribed_text,
                 "analisis": {
                     "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
@@ -158,20 +157,18 @@ async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
             }
             
         finally:
-            # Clean up temporary file
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
         
     except HTTPException:
         raise
     except Exception as e:
-        # Clean up temporary file in case of error
         try:
             if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
         except:
             pass
-        raise HTTPException(status_code=500, detail=f"Error processing audio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing audio/video: {str(e)}")
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
@@ -189,15 +186,25 @@ async def download_file(filename: str):
 @app.get("/")
 async def root():
     return {
-        "message": "Welcome to BISAcare API",
+        "message": "Welcome to BISAcare - AI-Powered Insurance Assistant",
+        "features": {
+            "chatbot": "BISAbot dengan RAG terintegrasi untuk jawaban akurat",
+            "document_analysis": "Analisis keluhan kesehatan dengan AI",
+            "document_generation": "Generate surat aju banding otomatis",
+            "voice_support": "Support input suara untuk analisis keluhan"
+        },
         "endpoints": {
-            "bisabot": "/bisabot (POST) - Chat dengan BISAbot",
+            "bisabot": "/bisabot (POST) - Chat dengan BISAbot (RAG terintegrasi)",
             "bisabot_history": "/bisabot/history (GET) - Lihat riwayat chat",
+            "bisabot_status": "/bisabot/status (GET) - Status BISAbot dan RAG",
             "clear_history": "/bisabot/history (DELETE) - Hapus riwayat chat",
             "surat_banding": "/surat_aju_banding (POST) - Buat surat aju banding",
             "analisis_keluhan": "/keluhanmu_bisa_diklaim (POST) - Analisis keluhan kesehatan (text)",
-            "analisis_keluhan_voice": "/keluhanmu_bisa_diklaim/voice (POST) - Analisis keluhan dari audio",
+            "analisis_keluhan_voice": "/keluhanmu_bisa_diklaim/voice (POST) - Analisis keluhan dari audio/video",
             "download": "/download/{filename} (GET) - Download file PDF"
         },
-        "voice_formats_supported": ["mp3", "wav", "m4a", "flac", "ogg", "webm"]
+        "setup": {
+            "rag_documents": "Letakkan file PDF asuransi di folder: ./rag/documents/",
+            "supported_audio": ["mp3", "wav", "m4a", "flac", "ogg", "webm", "mp4"]
+        }
     }
