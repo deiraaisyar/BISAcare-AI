@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history
 from features.surat_aju_banding.surat_aju_banding import buat_surat_aju_banding_pdf
+from features.keluhanmu_bisa_diklaim.keluhanmu_bisa_diklaim import analyze_health_complaint, analyze_health_complaint_from_audio
 import os
 import uuid
+import tempfile
+import shutil
+from typing import Optional
 
 app = FastAPI(title="BISAcare")
 
@@ -21,7 +25,11 @@ class SuratAjuBandingRequest(BaseModel):
     perihal_klaim: str
     alasan_penolakan: str
     alasan_banding: str
-    nama_perusahaan_asuransi: str 
+    nama_perusahaan_asuransi: str
+
+class KeluhanRequest(BaseModel):
+    keluhan_text: str
+    metode_input: str = "text"  # "text" atau "voice"
 
 @app.post("/bisabot")
 async def chat(query: Query):
@@ -73,6 +81,98 @@ async def buat_surat_banding(request: SuratAjuBandingRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.post("/keluhanmu_bisa_diklaim")
+async def analisis_keluhan(request: KeluhanRequest):
+    """
+    Endpoint untuk menganalisis keluhan kesehatan
+    Input: text keluhan
+    Output: persentase klaim + kemungkinan diagnosis
+    """
+    try:
+        if not request.keluhan_text.strip():
+            raise HTTPException(status_code=400, detail="Keluhan tidak boleh kosong")
+        
+        # Analisis keluhan menggunakan AI
+        result = analyze_health_complaint(request.keluhan_text)
+        
+        return {
+            "status": "success",
+            "keluhan_input": request.keluhan_text,
+            "metode_input": request.metode_input,
+            "analisis": {
+                "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
+                "kemungkinan_diagnosis": result.get("kemungkinan_diagnosis", []),
+                "rekomendasi_tindakan": result.get("rekomendasi_tindakan", []),
+                "tingkat_urgensi": result.get("tingkat_urgensi", "sedang"),
+                "dokumen_pendukung_diperlukan": result.get("dokumen_pendukung", [])
+            },
+            "disclaimer": "Hasil analisis ini hanya sebagai referensi. Konsultasikan dengan dokter untuk diagnosis yang akurat."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error menganalisis keluhan: {str(e)}")
+
+@app.post("/keluhanmu_bisa_diklaim/voice")
+async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
+    """
+    Endpoint untuk upload audio keluhan menggunakan OpenAI Whisper
+    Supported formats: mp3, wav, m4a, flac, ogg
+    """
+    try:
+        # Validate file type
+        allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm']
+        file_extension = os.path.splitext(audio_file.filename)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
+            )
+        
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            shutil.copyfileobj(audio_file.file, temp_file)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Analyze audio file
+            result = analyze_health_complaint_from_audio(temp_file_path)
+            
+            # Get transcribed text
+            transcribed_text = result.get("transcribed_text", "")
+            
+            return {
+                "status": "success",
+                "keluhan_input": transcribed_text,
+                "metode_input": "voice",
+                "original_filename": audio_file.filename,
+                "transcribed_text": transcribed_text,
+                "analisis": {
+                    "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
+                    "kemungkinan_diagnosis": result.get("kemungkinan_diagnosis", []),
+                    "rekomendasi_tindakan": result.get("rekomendasi_tindakan", []),
+                    "tingkat_urgensi": result.get("tingkat_urgensi", "sedang"),
+                    "dokumen_pendukung_diperlukan": result.get("dokumen_pendukung", [])
+                },
+                "disclaimer": "Hasil analisis ini hanya sebagai referensi. Konsultasikan dengan dokter untuk diagnosis yang akurat."
+            }
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up temporary file in case of error
+        try:
+            if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error processing audio: {str(e)}")
+
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = f"./{filename}"
@@ -95,6 +195,9 @@ async def root():
             "bisabot_history": "/bisabot/history (GET) - Lihat riwayat chat",
             "clear_history": "/bisabot/history (DELETE) - Hapus riwayat chat",
             "surat_banding": "/surat_aju_banding (POST) - Buat surat aju banding",
+            "analisis_keluhan": "/keluhanmu_bisa_diklaim (POST) - Analisis keluhan kesehatan (text)",
+            "analisis_keluhan_voice": "/keluhanmu_bisa_diklaim/voice (POST) - Analisis keluhan dari audio",
             "download": "/download/{filename} (GET) - Download file PDF"
-        }
+        },
+        "voice_formats_supported": ["mp3", "wav", "m4a", "flac", "ogg", "webm"]
     }

@@ -3,3 +3,9 @@ python-dotenv
 transformers
 fastapi
 uvicorn[standard]
+reportlab
+python-multipart
+torch
+torchaudio
+git+https://github.com/openai/whisper.git
+ffmpeg-python
