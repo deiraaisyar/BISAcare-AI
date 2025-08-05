@@ -6,7 +6,7 @@ load_dotenv()
 
 # Initialize Hugging Face client
 client = InferenceClient(
-    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    model="meta-llama/Llama-3.2-3B-Instruct",
     token=os.getenv("HF_TOKEN")
 )
 
