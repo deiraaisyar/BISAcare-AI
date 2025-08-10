@@ -65,10 +65,10 @@ class DocumentLoader:
         return all_documents
 
 # Test loading
-if __name__ == "__main__":
-    loader = DocumentLoader()
-    docs = loader.load_all_documents()
-    print(f"Loaded {len(docs)} document chunks")
-    if docs:
-        print(f"Sample chunk: {docs[0].page_content[:200]}...")
-        print(f"Metadata: {docs[0].metadata}")
+# if __name__ == "__main__":
+#     loader = DocumentLoader()
+#     docs = loader.load_all_documents()
+#     print(f"Loaded {len(docs)} document chunks")
+#     if docs:
+#         print(f"Sample chunk: {docs[0].page_content[:200]}...")
+#         print(f"Metadata: {docs[0].metadata}")
