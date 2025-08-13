@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history, get_rag_status
 from features.surat_aju_banding.surat_aju_banding import buat_surat_aju_banding_pdf
 from features.keluhanmu_bisa_diklaim.keluhanmu_bisa_diklaim import analyze_health_complaint, analyze_health_complaint_from_audio
+from features.hospital_recommender.hospital_recommender import recommend_hospitals
+from daftar_rumah_sakit.data_processing import load_faiss_index, load_json, build_model
 import os
 import uuid
 import tempfile
@@ -30,6 +32,18 @@ class SuratAjuBandingRequest(BaseModel):
 class KeluhanRequest(BaseModel):
     keluhan_text: str
     metode_input: str = "text"
+
+class HospitalRecommendRequest(BaseModel):
+    nama: str
+    kelurahan_desa: str
+    kecamatan: str
+    umur: int
+    jenis_layanan: str
+    keluhan: str
+    nama_asuransi: str
+    nama_provinsi: str
+    nama_daerah: str
+    top_n: int = 5
 
 # ============= BISABOT ENDPOINTS (with integrated RAG) =============
 
@@ -169,6 +183,37 @@ async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
         except:
             pass
         raise HTTPException(status_code=500, detail=f"Error processing audio/video: {str(e)}")
+
+# Load data, index, dan model sekali di awal
+DATA_PATH = "daftar_rumah_sakit/preprocessed/daftar_rumah_sakit_all.json"
+INDEX_PATH = "daftar_rumah_sakit/app/embeddings/hospital_st.index"
+MODEL_PATH = "daftar_rumah_sakit/app/models/st_model"
+
+hospital_data = load_json(DATA_PATH)
+hospital_index = load_faiss_index(INDEX_PATH)
+hospital_model = build_model(MODEL_PATH)
+
+@app.post("/rekomendasi_rumah_sakit")
+async def rekomendasi_rumah_sakit(request: HospitalRecommendRequest):
+    try:
+        results = recommend_hospitals(
+            data=hospital_data,
+            index=hospital_index,
+            model=hospital_model,
+            nama=request.nama,
+            kelurahan_desa=request.kelurahan_desa,
+            kecamatan=request.kecamatan,
+            umur=request.umur,
+            jenis_layanan=request.jenis_layanan,
+            keluhan=request.keluhan,
+            nama_asuransi=request.nama_asuransi,
+            nama_provinsi=request.nama_provinsi,
+            nama_daerah=request.nama_daerah,
+            top_n=request.top_n
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
