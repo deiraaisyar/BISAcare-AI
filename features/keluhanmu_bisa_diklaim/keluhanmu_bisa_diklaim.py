@@ -319,8 +319,8 @@ def fallback_analysis(keluhan, error_msg):
         "catatan": f"Analisis AI tidak tersedia: {error_msg[:100]}..."
     }
 
-# Test function
-if __name__ == "__main__":
-    test_keluhan = "Saya mengalami demam tinggi 39 derajat, batuk berdahak, dan sesak napas sejak 3 hari yang lalu"
-    result = analyze_health_complaint(test_keluhan)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+# # Test function
+# if __name__ == "__main__":
+#     test_keluhan = "Saya mengalami demam tinggi 39 derajat, batuk berdahak, dan sesak napas sejak 3 hari yang lalu"
+#     result = analyze_health_complaint(test_keluhan)
+#     print(json.dumps(result, indent=2, ensure_ascii=False))

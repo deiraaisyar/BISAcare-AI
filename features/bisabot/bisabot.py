@@ -50,9 +50,9 @@ def initialize_rag():
 SYSTEM_PROMPT = """Anda adalah BISAbot, asisten AI yang membantu pengguna memahami produk asuransi.
 
 INSTRUKSI PENTING:
-- Jika tersedia informasi dari dokumen asuransi, gunakan sebagai referensi utama
+- Jika tersedia informasi dari dokumen asuransi, gunakan sebagai referensi utama, tidak usah dicantumkan sumber dokumennya, asalkan sesuai
 - Berikan jawaban yang akurat, jelas, dan mudah dipahami  
-- Jika informasi tidak lengkap, berikan saran untuk menghubungi customer service
+- Jika informasi tidak lengkap, berikan jawaban sesuai pengetahuan anda dan memberikan saran untuk menghubungi customer service di akhir jawaban
 - Gunakan bahasa yang ramah dan profesional
 - Fokus pada memberikan informasi yang bermanfaat tentang asuransi
 
@@ -204,24 +204,24 @@ def get_rag_status():
             "index_ready": rag_retriever.index is not None
         }
 
-# Test function
-if __name__ == "__main__":
-    print("Testing BISAbot with RAG...")
+# # Test function
+# if __name__ == "__main__":
+#     print("Testing BISAbot with RAG...")
     
-    # Test RAG status
-    status = get_rag_status()
-    print(f"RAG Status: {status}")
+#     # Test RAG status
+#     status = get_rag_status()
+#     print(f"RAG Status: {status}")
     
-    # Test questions
-    test_questions = [
-        "Apa itu asuransi kesehatan?",
-        "Bagaimana cara klaim asuransi?", 
-        "Berapa premi asuransi kesehatan?",
-        "Apa saja manfaat yang ditanggung?"
-    ]
+#     # Test questions
+#     test_questions = [
+#         "Apa itu asuransi kesehatan?",
+#         "Bagaimana cara klaim asuransi?", 
+#         "Berapa premi asuransi kesehatan?",
+#         "Apa saja manfaat yang ditanggung?"
+#     ]
     
-    for question in test_questions:
-        print(f"\nQ: {question}")
-        answer = ask_bisabot(question)
-        print(f"A: {answer}")
-        print("-" * 80)
+#     for question in test_questions:
+#         print(f"\nQ: {question}")
+#         answer = ask_bisabot(question)
+#         print(f"A: {answer}")
+#         print("-" * 80)

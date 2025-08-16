@@ -18,3 +18,12 @@ pypdf2
 faiss-cpu
 sentence-transformers
 chromadb
+Sastrawi
+tqdm
+scikit-learn
+pandas
+gensim
+nltk
+beautifulsoup4
+selenium
+webdriver-manager
