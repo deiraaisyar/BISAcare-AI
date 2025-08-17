@@ -15,17 +15,14 @@ def cek_data_isi_data(data_isi):
     Menggabungkan insight dari chat history BISAbot dan AI reasoning.
     """
     saran = []
-    # Cek field KTP
     ktp = data_isi.get("ktp", {})
     if not ktp or any(v in [None, "", "null"] for v in ktp.values()):
         saran.append("Lengkapi data KTP. Jika belum punya, silakan unggah foto KTP yang jelas.")
 
-    # Cek field Polis
     polis = data_isi.get("polis", {})
     if not polis or any(v in [None, "", "null"] for v in polis.values()):
         saran.append("Lengkapi data Polis Asuransi. Jika belum punya, minta salinan polis ke rumah sakit atau asuransi.")
-
-    # Cek nomor_polis, layanan, nomor_hp, keluhan
+        
     for field, label in [
         ("nomor_polis", "Nomor polis asuransi"),
         ("layanan", "Jenis layanan"),
@@ -35,11 +32,9 @@ def cek_data_isi_data(data_isi):
         if data_isi.get(field) in [None, "", "null"]:
             saran.append(f"Isi {label} pada form.")
 
-    # Ambil chat history BISAbot
     history = get_chat_history()
     last_message = history[-1]["message"] if history else ""
 
-    # AI reasoning untuk saran lebih kontekstual
     prompt = f"""
 Data user:
 {data_isi}
@@ -57,8 +52,7 @@ Berdasarkan data di atas, berikan saran langkah selanjutnya yang harus dilakukan
         stream=False
     ).choices[0].message.content
 
-    # Gabungkan saran manual dan AI
-    saran.append(f"AI: {ai_response}")
+    saran.append(f"{ai_response}")
 
     if not saran:
         saran.append("Data sudah lengkap. Kamu bisa melanjutkan proses klaim atau konsultasi lebih lanjut.")

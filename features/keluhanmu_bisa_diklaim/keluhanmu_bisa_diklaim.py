@@ -3,10 +3,13 @@ from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 import json
 import re
-import whisper
 import tempfile
 import shutil
 import logging
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
+import torch
+import librosa
+import whisper
 
 # Setup logging for debugging
 logging.basicConfig(level=logging.INFO)
@@ -14,111 +17,44 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Initialize Hugging Face client
 client = InferenceClient(
     model="meta-llama/Llama-3.2-3B-Instruct",
     token=os.getenv("HF_TOKEN")
 )
 
-# Load Whisper model (using base model for balance of speed and accuracy)
-whisper_model = None
-
-def load_whisper_model():
-    """Load Whisper model lazily"""
-    global whisper_model
-    if whisper_model is None:
-        logger.info("Loading Whisper model...")
-        try:
-            whisper_model = whisper.load_model("base")
-            logger.info("Whisper model loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load Whisper model: {str(e)}")
-            raise e
-    return whisper_model
-
 MEDICAL_ANALYSIS_PROMPT = """Anda adalah asisten AI medis yang membantu menganalisis keluhan kesehatan untuk asuransi.
 Berdasarkan keluhan yang diberikan, berikan analisis dalam format JSON:
 
 {
-    "persentase_klaim": "angka 0-100",
+    "persentase_klaim": "angka fix, misal 80, 90, 90.5, 10 (jangan gunakan rentang atau sampai dengan)",
     "kemungkinan_diagnosis": "daftar kemungkinan diagnosis",
     "rekomendasi_tindakan": "saran tindakan medis",
     "tingkat_urgensi": "rendah/sedang/tinggi",
     "dokumen_pendukung": "daftar dokumen yang diperlukan"
 }
 
-Berikan jawaban yang akurat dan profesional."""
+Berikan jawaban yang akurat dan profesional. Persentase klaim harus berupa satu angka pasti, bukan rentang atau 'sampai dengan'. Contoh: 80, 90, 90.5, 10."""
 
 def transcribe_audio(audio_file_path):
     """
-    Convert audio file to text using OpenAI Whisper
-    Supports MP4, MP3, WAV, M4A, FLAC, OGG, WebM
+    Convert audio file to text using OpenAI Whisper (local) model
     """
     try:
-        logger.info(f"Starting transcription for file: {audio_file_path}")
-        
-        # Check if file exists and has content
-        if not os.path.exists(audio_file_path):
-            raise Exception(f"Audio file not found: {audio_file_path}")
-        
+        logger.info(f"Audio file path received: {audio_file_path}")
+        if not audio_file_path or not isinstance(audio_file_path, str) or not os.path.exists(audio_file_path):
+            raise Exception(f"Audio file not found or path invalid: {audio_file_path}")
         file_size = os.path.getsize(audio_file_path)
-        logger.info(f"Audio file size: {file_size} bytes")
-        
+        logger.info(f"File size: {file_size} bytes")
         if file_size == 0:
             raise Exception("Audio file is empty")
-        
-        model = load_whisper_model()
-        
-        # Try multiple approaches for better transcription
-        logger.info("Starting Whisper transcription...")
-        
-        # Approach 1: Auto-detect language first
-        try:
-            result = model.transcribe(
-                audio_file_path,
-                language=None,  # Auto-detect language
-                fp16=False,
-                verbose=True  # Enable verbose for debugging
-            )
-            logger.info(f"Auto-detect result: {result}")
-        except Exception as e:
-            logger.warning(f"Auto-detect failed: {str(e)}, trying with Indonesian language...")
-            
-            # Approach 2: Force Indonesian language
-            result = model.transcribe(
-                audio_file_path,
-                language='id',  # Force Indonesian
-                fp16=False,
-                verbose=True,
-                task='transcribe'  # Explicitly set task
-            )
-            logger.info(f"Indonesian language result: {result}")
-        
-        transcribed_text = result.get("text", "").strip()
-        detected_language = result.get("language", "unknown")
-        
-        logger.info(f"Transcribed text: '{transcribed_text}'")
-        logger.info(f"Detected language: {detected_language}")
-        
-        if not transcribed_text:
-            # Try one more time with different settings
-            logger.warning("Empty transcription, trying with 'tiny' model...")
-            tiny_model = whisper.load_model("tiny")
-            result = tiny_model.transcribe(
-                audio_file_path,
-                language='id',
-                fp16=False
-            )
-            transcribed_text = result.get("text", "").strip()
-            logger.info(f"Tiny model result: '{transcribed_text}'")
-        
-        if not transcribed_text:
-            raise Exception("Transcription resulted in empty text. Audio might be silent or corrupt.")
-        
-        return transcribed_text
-        
+        # Load OpenAI Whisper model (choose 'base', 'small', 'medium', 'large', etc)
+        model = whisper.load_model("base")
+        result = model.transcribe(audio_file_path)
+        transcription = result["text"]
+        logger.info(f"OpenAI Whisper transcription result: '{transcription}'")
+        return transcription.strip()
     except Exception as e:
-        logger.error(f"Error in transcribe_audio: {str(e)}")
+        logger.error(f"Error in OpenAI Whisper transcribe_audio: {str(e)}")
         raise Exception(f"Error transcribing audio: {str(e)}")
 
 def analyze_health_complaint(keluhan_text):
@@ -215,26 +151,34 @@ def analyze_health_complaint_from_audio(audio_file_path):
         }
 
 def parse_text_response(response_text, keluhan):
-    """Parse response text menjadi format yang diinginkan"""
-    
-    # Analisis sederhana berdasarkan keyword
-    serious_symptoms = ['nyeri dada', 'sesak napas', 'demam tinggi', 'muntah darah', 'pingsan', 'stroke']
-    moderate_symptoms = ['demam', 'batuk', 'sakit kepala', 'mual', 'diare', 'nyeri perut']
-    mild_symptoms = ['flu', 'pilek', 'batuk ringan', 'pusing ringan']
-    
-    keluhan_lower = keluhan.lower()
-    
-    # Tentukan persentase berdasarkan severity
-    if any(symptom in keluhan_lower for symptom in serious_symptoms):
-        persentase = "85-95"
-        urgensi = "tinggi"
-    elif any(symptom in keluhan_lower for symptom in moderate_symptoms):
-        persentase = "60-80"
-        urgensi = "sedang"
+    """
+    Parse response text menjadi format yang diinginkan.
+    Jika respons AI mengandung persentase klaim, gunakan itu.
+    Jika tidak, fallback ke analisis sederhana.
+    """
+    # Coba cari angka persentase di response AI
+    match = re.search(r'persentase[_\s]?klaim["\':\s]*([0-9]+(?:\.[0-9]+)?)', response_text, re.IGNORECASE)
+    if match:
+        persentase = float(match.group(1))
+        if persentase > 100: persentase = 100
+        if persentase < 0: persentase = 0
     else:
-        persentase = "30-60"
-        urgensi = "rendah"
-    
+        # Fallback sederhana jika AI gagal
+        keluhan_lower = keluhan.lower()
+        if any(symptom in keluhan_lower for symptom in ['nyeri dada', 'sesak napas', 'demam tinggi', 'muntah darah', 'pingsan', 'stroke']):
+            persentase = 90
+            urgensi = "tinggi"
+        elif any(symptom in keluhan_lower for symptom in ['demam', 'batuk', 'sakit kepala', 'mual', 'diare', 'nyeri perut']):
+            persentase = 75
+            urgensi = "sedang"
+        else:
+            persentase = 50
+            urgensi = "rendah"
+
+    # Tentukan urgensi dari AI jika ada, jika tidak fallback
+    urgensi_match = re.search(r'tingkat[_\s]?urgensi["\':\s]*(rendah|sedang|tinggi)', response_text, re.IGNORECASE)
+    urgensi = urgensi_match.group(1).lower() if urgensi_match else "sedang"
+
     return {
         "persentase_klaim": persentase,
         "kemungkinan_diagnosis": extract_diagnosis_from_text(response_text, keluhan),
@@ -283,21 +227,20 @@ def extract_recommendations_from_text(text):
 
 def fallback_analysis(keluhan, error_msg):
     """Analisis fallback jika AI gagal"""
-    
-    # Analisis keyword sederhana
+
     keluhan_lower = keluhan.lower()
-    
-    # Determine severity and percentage
+
+    # Determine severity and percentage (ubah ke angka fix)
     if any(word in keluhan_lower for word in ['parah', 'sangat sakit', 'tidak bisa', 'emergency']):
-        persentase = "80-90"
+        persentase = 85
         urgensi = "tinggi"
     elif any(word in keluhan_lower for word in ['sakit', 'nyeri', 'demam']):
-        persentase = "60-75"
-        urgensi = "sedang"  
+        persentase = 70
+        urgensi = "sedang"
     else:
-        persentase = "40-60"
+        persentase = 40
         urgensi = "rendah"
-    
+
     return {
         "persentase_klaim": persentase,
         "kemungkinan_diagnosis": [
@@ -318,9 +261,3 @@ def fallback_analysis(keluhan, error_msg):
         ],
         "catatan": f"Analisis AI tidak tersedia: {error_msg[:100]}..."
     }
-
-# # Test function
-# if __name__ == "__main__":
-#     test_keluhan = "Saya mengalami demam tinggi 39 derajat, batuk berdahak, dan sesak napas sejak 3 hari yang lalu"
-#     result = analyze_health_complaint(test_keluhan)
-#     print(json.dumps(result, indent=2, ensure_ascii=False))

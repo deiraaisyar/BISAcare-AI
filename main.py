@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form, Body
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history, get_rag_status
+from features.bisabot.bisabot import ask_bisabot, get_chat_history, clear_chat_history
 from features.surat_aju_banding.surat_aju_banding import buat_surat_aju_banding_pdf
 from features.keluhanmu_bisa_diklaim.keluhanmu_bisa_diklaim import analyze_health_complaint, analyze_health_complaint_from_audio
 from features.hospital_recommender.hospital_recommender import recommend_hospitals
@@ -15,8 +15,10 @@ import uuid
 import tempfile
 import shutil
 from typing import Optional
+import logging
 
 app = FastAPI(title="BISAcare - AI-Powered Insurance Assistant")
+logger = logging.getLogger("uvicorn.error")
 
 class Query(BaseModel):
     question: str
@@ -52,32 +54,23 @@ class InsuranceRecommendRequest(BaseModel):
     query: str
     top_n: int = 5
 
-@app.post("/bisabot")
+@app.post("/bisabot") #OK
 async def chat(query: Query):
     """Chat dengan BISAbot yang sudah terintegrasi dengan RAG"""
     response = ask_bisabot(query.question)
     return {"answer": response}
 
-@app.get("/bisabot/history")
+@app.get("/bisabot/history") #OK
 async def get_history():
     """Get chat history"""
     history = get_chat_history()
     return {"history": history}
 
-@app.delete("/bisabot/history")
+@app.delete("/bisabot/history") #OK
 async def clear_history():
     """Clear chat history"""
     clear_chat_history()
     return {"message": "Chat history cleared successfully"}
-
-@app.get("/bisabot/status")
-async def get_status():
-    """Get BISAbot and RAG status"""
-    rag_status = get_rag_status()
-    return {
-        "bisabot": "online",
-        "rag": rag_status
-    }
 
 @app.post("/surat_aju_banding")
 async def buat_surat_banding(request: SuratAjuBandingRequest):
@@ -119,7 +112,7 @@ hospital_data = load_json(DATA_PATH)
 hospital_index = load_faiss_index(INDEX_PATH)
 hospital_model = build_model(MODEL_PATH)
 
-@app.post("/rekomendasi_rumah_sakit")
+@app.post("/rekomendasi_rumah_sakit") #OK
 async def rekomendasi_rumah_sakit(request: HospitalRecommendRequest):
     try:
         results = recommend_hospitals(
@@ -129,7 +122,6 @@ async def rekomendasi_rumah_sakit(request: HospitalRecommendRequest):
             nama=request.nama,
             kelurahan_desa=request.kelurahan_desa,
             kecamatan=request.kecamatan,
-            umur=request.umur,
             jenis_layanan=request.jenis_layanan,
             keluhan=request.keluhan,
             nama_asuransi=request.nama_asuransi,
@@ -149,7 +141,7 @@ asuransi_data = load_json(ASURANSI_DATA_PATH)
 asuransi_index = load_faiss_index(ASURANSI_INDEX_PATH)
 asuransi_model = build_model(ASURANSI_MODEL_PATH)
 
-@app.post("/rekomendasi_asuransi")
+@app.post("/rekomendasi_asuransi") #OK
 async def rekomendasi_asuransi(request: InsuranceRecommendRequest):
     try:
         results = recommend_asuransi(
@@ -181,7 +173,7 @@ async def isi_data(
     foto_ktp: UploadFile = File(...),
     foto_polis: UploadFile = File(...),
     nomor_polis: str = Form(...),
-    pilih_layanan: str = Form(...),
+    jenis_layanan: str = Form(...),  # Ubah dari pilih_layanan
     nomor_hp: str = Form(...),
     input_keluhan: str = Form(...)
 ):
@@ -189,29 +181,30 @@ async def isi_data(
     Upload foto KTP & Polis, plus data form lain.
     Output: hasil OCR & parsing + data form.
     """
-    # OCR & AI parsing KTP
     ktp_bytes = await foto_ktp.read()
     ktp_raw_text = extract_text(ktp_bytes)
     ktp_parsed = parse_with_ai(ktp_raw_text)
 
-    # OCR & AI parsing Polis
     polis_bytes = await foto_polis.read()
     polis_raw_text = extract_text(polis_bytes)
     polis_parsed = parse_with_ai(polis_raw_text)
 
-    # Gabungkan hasil parsing
+    # Hapus jenis_layanan dari polis
+    if isinstance(polis_parsed, dict) and "jenis_layanan" in polis_parsed:
+        polis_parsed.pop("jenis_layanan")
+
     result = {
         "ktp": ktp_parsed.get("ktp") if hasattr(ktp_parsed, "get") else ktp_parsed,
         "polis": polis_parsed.get("polis") if hasattr(polis_parsed, "get") else polis_parsed,
         "raw_text": f"{ktp_raw_text}\n{polis_raw_text}",
         "nomor_polis": nomor_polis,
-        "layanan": pilih_layanan,
+        "layanan": jenis_layanan,
         "nomor_hp": nomor_hp,
         "keluhan": input_keluhan
     }
     return result
 
-@app.post("/bantu_proses_ai")
+@app.post("/bantu_proses_ai") #OK
 async def bantu_proses_ai_endpoint(
     data_isi: dict = Body(...)
 ):
@@ -257,7 +250,7 @@ async def get_slip_rumah_sakit(slip_id: str):
 
 keluhan_data_store = {}
 
-@app.post("/keluhanmu_bisa_diklaim")
+@app.post("/keluhanmu_bisa_diklaim") #OK
 async def analisis_keluhan(
     keluhan_text: Optional[str] = Form(None),
     metode_input: Optional[str] = Form("text"),
@@ -275,9 +268,11 @@ async def analisis_keluhan(
                     status_code=400, 
                     detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
                 )
+            logger.info(f"Saving audio file: {audio_file.filename}")
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
                 shutil.copyfileobj(audio_file.file, temp_file)
                 temp_file_path = temp_file.name
+            logger.info(f"Temp file saved at: {temp_file_path}, exists: {os.path.exists(temp_file_path)}")
             try:
                 result = analyze_health_complaint_from_audio(temp_file_path)
                 keluhan_input = result.get("transcribed_text", "")
@@ -313,7 +308,7 @@ async def analisis_keluhan(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error menganalisis keluhan: {str(e)}")
 
-@app.get("/keluhanmu_bisa_diklaim/{keluhan_id}")
+@app.get("/keluhanmu_bisa_diklaim/{keluhan_id}") #OK
 async def get_keluhanmu_bisa_diklaim(keluhan_id: str):
     data = keluhan_data_store.get(keluhan_id)
     if not data:
@@ -331,21 +326,19 @@ async def root():
             "voice_support": "Support input suara untuk analisis keluhan"
         },
         "endpoints": {
-            "bisabot": "/bisabot (POST) - Chat dengan BISAbot (RAG terintegrasi)",
-            "bisabot_history": "/bisabot/history (GET) - Lihat riwayat chat",
-            "bisabot_status": "/bisabot/status (GET) - Status BISAbot dan RAG",
-            "clear_history": "/bisabot/history (DELETE) - Hapus riwayat chat",
+            "bisabot": "/bisabot (POST) - Chat dengan BISAbot (RAG terintegrasi)", # OK
+            "bisabot_history": "/bisabot/history (GET) - Lihat riwayat chat", #OK
+            "clear_history": "/bisabot/history (DELETE) - Hapus riwayat chat", #OK
             "surat_banding": "/surat_aju_banding (POST) - Buat surat aju banding",
-            "analisis_keluhan": "/keluhanmu_bisa_diklaim (POST) - Analisis keluhan kesehatan (text)",
-            "analisis_keluhan_voice": "/keluhanmu_bisa_diklaim/voice (POST) - Analisis keluhan dari audio/video",
+            "analisis_keluhan": "/keluhanmu_bisa_diklaim (POST) - Analisis keluhan kesehatan (text)", #OK
             "download": "/download/{filename} (GET) - Download file PDF",
             "isi_data": "/isi_data (POST) - Upload foto KTP & Polis, dan data form lain",
             "bantu_proses_ai": "/bantu_proses_ai (POST) - Cek data isi_data dan saran AI",
             "upload_slip": "/slip_rumah_sakit (POST) - Upload slip rumah sakit dan ekstrak data",
             "get_slip": "/slip_rumah_sakit/{slip_id} (GET) - Ambil data slip rumah sakit berdasarkan ID",
             "get_keluhan": "/keluhanmu_bisa_diklaim/{keluhan_id} (GET) - Ambil data keluhan berdasarkan ID",
-            "rekomendasi_rumah_sakit": "/rekomendasi_rumah_sakit (POST) - Rekomendasi rumah sakit",
-            "rekomendasi_asuransi": "/rekomendasi_asuransi (POST) - Rekomendasi asuransi"
+            "rekomendasi_rumah_sakit": "/rekomendasi_rumah_sakit (POST) - Rekomendasi rumah sakit", #OK
+            "rekomendasi_asuransi": "/rekomendasi_asuransi (POST) - Rekomendasi asuransi" # OK
         },
         "setup": {
             "rag_documents": "Letakkan file PDF asuransi di folder: ./rag/documents/",

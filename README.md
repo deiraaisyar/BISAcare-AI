@@ -4,7 +4,7 @@
 
 ### 1. `/bisabot` (POST)
 **Deskripsi:**  
-Chat dengan BISAbot (chatbot asuransi) yang sudah terintegrasi dengan RAG (Retrieval Augmented Generation).
+Chat dengan BISAbot (chatbot asuransi) yang sudah terintegrasi dengan RAG.
 
 **Input:**  
 ```json
@@ -12,7 +12,6 @@ Chat dengan BISAbot (chatbot asuransi) yang sudah terintegrasi dengan RAG (Retri
   "question": "Tulis pertanyaan Anda di sini"
 }
 ```
-
 **Output:**  
 ```json
 {
@@ -51,21 +50,7 @@ Menghapus seluruh riwayat chat BISAbot.
 
 ---
 
-### 4. `/bisabot/status` (GET)
-**Deskripsi:**  
-Cek status BISAbot dan status RAG (apakah index sudah siap).
-
-**Output:**  
-```json
-{
-  "bisabot": "online",
-  "rag": "ready" // atau status lain
-}
-```
-
----
-
-### 5. `/surat_aju_banding` (POST)
+### 4. `/surat_aju_banding` (POST)
 **Deskripsi:**  
 Generate surat aju banding asuransi dalam format PDF.
 
@@ -84,7 +69,6 @@ Generate surat aju banding asuransi dalam format PDF.
   "nama_perusahaan_asuransi": "Nama Perusahaan Asuransi"
 }
 ```
-
 **Output:**  
 ```json
 {
@@ -96,24 +80,171 @@ Generate surat aju banding asuransi dalam format PDF.
 
 ---
 
-### 6. `/keluhanmu_bisa_diklaim` (POST)
+### 5. `/rekomendasi_rumah_sakit` (POST)
 **Deskripsi:**  
-Analisis keluhan kesehatan berbasis teks untuk estimasi kemungkinan klaim asuransi.
+Rekomendasi rumah sakit berdasarkan data user dan asuransi.
 
 **Input:**  
 ```json
 {
-  "keluhan_text": "Keluhan kesehatan Anda",
-  "metode_input": "text"
+  "nama": "Nama",
+  "kelurahan_desa": "Kelurahan/Desa",
+  "kecamatan": "Kecamatan",
+  "jenis_layanan": "Rawat Inap/Rawat Jalan",
+  "keluhan": "Keluhan kesehatan",
+  "nama_asuransi": "Nama Asuransi",
+  "nama_provinsi": "Nama Provinsi",
+  "nama_daerah": "Nama Daerah",
+  "top_n": 5
 }
 ```
+**Output:**  
+```json
+{
+  "results": [ ... ]
+}
+```
+
+---
+
+### 6. `/rekomendasi_asuransi` (POST)
+**Deskripsi:**  
+Rekomendasi produk asuransi berdasarkan query user.
+
+**Input:**  
+```json
+{
+  "query": "Saya ingin asuransi kesehatan keluarga",
+  "top_n": 5
+}
+```
+**Output:**  
+```json
+{
+  "results": [ ... ]
+}
+```
+
+---
+
+### 7. `/download/{filename}` (GET)
+**Deskripsi:**  
+Download file PDF hasil generate surat aju banding.
+
+**Input:**  
+- Path parameter: `filename` (nama file PDF)
+
+**Output:**  
+- File PDF sebagai response.
+
+---
+
+### 8. `/isi_data` (POST)
+**Deskripsi:**  
+Upload foto KTP & Polis, plus data form lain.  
+Output: hasil OCR & parsing + data form.
+
+**Input:**  
+- Form-data:
+  - `foto_ktp` (file)
+  - `foto_polis` (file)
+  - `nomor_polis` (string)
+  - `jenis_layanan` (string)
+  - `nomor_hp` (string)
+  - `input_keluhan` (string)
+
+**Output:**  
+```json
+{
+  "ktp": { ... },
+  "polis": { ... },
+  "raw_text": "...",
+  "nomor_polis": "...",
+  "jenis_layanan": "...",
+  "nomor_hp": "...",
+  "keluhan": "..."
+}
+```
+
+---
+
+### 9. `/bantu_proses_ai` (POST)
+**Deskripsi:**  
+Cek data hasil isi_data dan memberi saran AI untuk langkah selanjutnya.
+
+**Input:**  
+```json
+{
+  "ktp": { ... },
+  "polis": { ... },
+  "nomor_polis": "...",
+  "jenis_layanan": "...",
+  "nomor_hp": "...",
+  "keluhan": "..."
+}
+```
+**Output:**  
+```json
+{
+  "status": "cek_data",
+  "saran": [ ... ],
+  "data_isi": { ... },
+  "chat_history": [ ... ]
+}
+```
+
+---
+
+### 10. `/slip_rumah_sakit` (POST)
+**Deskripsi:**  
+Upload slip rumah sakit, ekstrak data penting dengan AI.
+
+**Input:**  
+- Form-data: `foto_slip` (file)
+
+**Output:**  
+```json
+{
+  "slip_id": "...",
+  "filename": "...",
+  "parsed": { ... }
+}
+```
+
+---
+
+### 11. `/slip_rumah_sakit/{slip_id}` (GET)
+**Deskripsi:**  
+Ambil hasil ekstraksi slip rumah sakit berdasarkan slip_id.
+
+**Output:**  
+```json
+{
+  "filename": "...",
+  "raw_text": "...",
+  "parsed": { ... }
+}
+```
+
+---
+
+### 12. `/keluhanmu_bisa_diklaim` (POST)
+**Deskripsi:**  
+Analisis keluhan kesehatan, input bisa teks atau audio/video.
+
+**Input:**  
+- Form-data:
+  - `keluhan_text` (string, optional)
+  - `metode_input` (string, default: "text")
+  - `audio_file` (file, optional)
 
 **Output:**  
 ```json
 {
   "status": "success",
+  "keluhan_id": "...",
   "keluhan_input": "...",
-  "metode_input": "text",
+  "metode_input": "...",
   "analisis": {
     "persentase_kemungkinan_klaim": "...",
     "kemungkinan_diagnosis": [...],
@@ -127,22 +258,15 @@ Analisis keluhan kesehatan berbasis teks untuk estimasi kemungkinan klaim asuran
 
 ---
 
-### 7. `/keluhanmu_bisa_diklaim/voice` (POST)
+### 13. `/keluhanmu_bisa_diklaim/{keluhan_id}` (GET)
 **Deskripsi:**  
-Analisis keluhan kesehatan berbasis audio (voice note atau video).
-
-**Input:**  
-- Form-data dengan field: `audio_file` (file audio/video, format: mp3, wav, m4a, flac, ogg, webm, mp4)
+Ambil data keluhan berdasarkan ID.
 
 **Output:**  
 ```json
 {
-  "status": "success",
   "keluhan_input": "...",
-  "metode_input": "voice",
-  "original_filename": "...",
-  "file_type": "...",
-  "transcribed_text": "...",
+  "metode_input": "...",
   "analisis": { ... },
   "disclaimer": "..."
 }
@@ -150,21 +274,19 @@ Analisis keluhan kesehatan berbasis audio (voice note atau video).
 
 ---
 
-### 8. `/download/{filename}` (GET)
-**Deskripsi:**  
-Download file PDF hasil generate surat aju banding.
-
-**Input:**  
-- Path parameter: `filename` (nama file PDF)
-
-**Output:**  
-- File PDF sebagai response.
-
----
-
-### 9. `/` (GET)
+### 14. `/` (GET)
 **Deskripsi:**  
 Root endpoint, menampilkan deskripsi singkat API dan daftar fitur.
+
+**Output:**  
+```json
+{
+  "message": "Welcome to BISAcare - AI-Powered Insurance Assistant",
+  "features": { ... },
+  "endpoints": { ... },
+  "setup": { ... }
+}
+```
 
 ---
 

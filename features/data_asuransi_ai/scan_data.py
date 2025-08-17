@@ -1,15 +1,12 @@
 import pytesseract
 from PIL import Image
 import io
-from huggingface_hub import InferenceClient
-from dotenv import load_dotenv
 import os
+import requests
+from dotenv import load_dotenv
 
 load_dotenv()
-client = InferenceClient(
-    model="meta-llama/Llama-3.2-3B-Instruct",
-    token=os.getenv("HF_TOKEN")
-)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def extract_text(image_bytes):
     image = Image.open(io.BytesIO(image_bytes))
@@ -24,14 +21,17 @@ Dari teks hasil OCR berikut:
 Pisahkan menjadi 2 bagian: informasi KTP dan informasi Polis Asuransi.
 Formatkan ke JSON dengan field:
 - KTP: nama, kelurahan_desa, kecamatan, nama_provinsi, nama_daerah
-- Polis: jenis_layanan, nama_asuransi
+- Polis: nama_asuransi
 Jawab hanya JSON saja.
 """
-    messages = [{"role": "user", "content": prompt}]
-    response = client.chat_completion(
-        messages=messages,
-        max_tokens=512,
-        temperature=0,
-        stream=False
-    )
-    return response.choices[0].message.content
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [
+            {"parts": [{"text": prompt}]}
+        ]
+    }
+    params = {"key": GEMINI_API_KEY}
+    response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
+    response.raise_for_status()
+    result_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
