@@ -8,6 +8,7 @@ from features.hospital_recommender.hospital_recommender import recommend_hospita
 from features.data_asuransi_ai.scan_data import extract_text, parse_with_ai
 from features.bantu_proses_ai.bantu_proses_ai import cek_data_isi_data
 from features.slip_rumah_sakit.slip_rumah_sakit import extract_text, parse_slip_with_ai
+from features.insurance_recommender.insurance_recommender import load_asuransi_data, recommend_asuransi
 from daftar_rumah_sakit.data_processing import load_faiss_index, load_json, build_model
 import os
 import uuid
@@ -40,12 +41,15 @@ class HospitalRecommendRequest(BaseModel):
     nama: str
     kelurahan_desa: str
     kecamatan: str
-    umur: int
     jenis_layanan: str
     keluhan: str
     nama_asuransi: str
     nama_provinsi: str
     nama_daerah: str
+    top_n: int = 5
+
+class InsuranceRecommendRequest(BaseModel):
+    query: str
     top_n: int = 5
 
 @app.post("/bisabot")
@@ -107,109 +111,6 @@ async def buat_surat_banding(request: SuratAjuBandingRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
-@app.post("/keluhanmu_bisa_diklaim")
-async def analisis_keluhan(
-    keluhan_text: Optional[str] = Form(None),
-    metode_input: Optional[str] = Form("text"),
-    audio_file: Optional[UploadFile] = File(None)
-):
-    """
-    Analisis keluhan kesehatan, input bisa teks atau audio/video.
-    """
-    try:
-        if metode_input == "voice" and audio_file is not None:
-            allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm', '.mp4']
-            file_extension = os.path.splitext(audio_file.filename)[1].lower()
-            if file_extension not in allowed_extensions:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
-                )
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
-                shutil.copyfileobj(audio_file.file, temp_file)
-                temp_file_path = temp_file.name
-            try:
-                result = analyze_health_complaint_from_audio(temp_file_path)
-                transcribed_text = result.get("transcribed_text", "")
-                keluhan_input = transcribed_text
-                metode = "voice" if file_extension != '.mp4' else "video"
-            finally:
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-        elif keluhan_text is not None and keluhan_text.strip():
-            result = analyze_health_complaint(keluhan_text)
-            keluhan_input = keluhan_text
-            metode = "text"
-        else:
-            raise HTTPException(status_code=400, detail="Keluhan tidak boleh kosong")
-        
-        return {
-            "status": "success",
-            "keluhan_input": keluhan_input,
-            "metode_input": metode,
-            "analisis": {
-                "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
-                "kemungkinan_diagnosis": result.get("kemungkinan_diagnosis", []),
-                "rekomendasi_tindakan": result.get("rekomendasi_tindakan", []),
-                "tingkat_urgensi": result.get("tingkat_urgensi", "sedang"),
-                "dokumen_pendukung_diperlukan": result.get("dokumen_pendukung", [])
-            },
-            "disclaimer": "Hasil analisis ini hanya sebagai referensi. Konsultasikan dengan dokter untuk diagnosis yang akurat."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error menganalisis keluhan: {str(e)}")
-
-# @app.post("/keluhanmu_bisa_diklaim/voice")
-# async def analisis_keluhan_voice(audio_file: UploadFile = File(...)):
-#     try:
-#         allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm', '.mp4']
-#         file_extension = os.path.splitext(audio_file.filename)[1].lower()
-        
-#         if file_extension not in allowed_extensions:
-#             raise HTTPException(
-#                 status_code=400, 
-#                 detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
-#             )
-        
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
-#             shutil.copyfileobj(audio_file.file, temp_file)
-#             temp_file_path = temp_file.name
-        
-#         try:
-#             result = analyze_health_complaint_from_audio(temp_file_path)
-#             transcribed_text = result.get("transcribed_text", "")
-            
-#             return {
-#                 "status": "success",
-#                 "keluhan_input": transcribed_text,
-#                 "metode_input": "voice" if file_extension != '.mp4' else "video",
-#                 "original_filename": audio_file.filename,
-#                 "file_type": file_extension,
-#                 "transcribed_text": transcribed_text,
-#                 "analisis": {
-#                     "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
-#                     "kemungkinan_diagnosis": result.get("kemungkinan_diagnosis", []),
-#                     "rekomendasi_tindakan": result.get("rekomendasi_tindakan", []),
-#                     "tingkat_urgensi": result.get("tingkat_urgensi", "sedang"),
-#                     "dokumen_pendukung_diperlukan": result.get("dokumen_pendukung", [])
-#                 },
-#                 "disclaimer": "Hasil analisis ini hanya sebagai referensi. Konsultasikan dengan dokter untuk diagnosis yang akurat."
-#             }
-            
-#         finally:
-#             if os.path.exists(temp_file_path):
-#                 os.unlink(temp_file_path)
-        
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         try:
-#             if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
-#                 os.unlink(temp_file_path)
-#         except:
-#             pass
-#         raise HTTPException(status_code=500, detail=f"Error processing audio/video: {str(e)}")
-
 DATA_PATH = "daftar_rumah_sakit/preprocessed/daftar_rumah_sakit_all.json"
 INDEX_PATH = "daftar_rumah_sakit/app/embeddings/hospital_st.index"
 MODEL_PATH = "daftar_rumah_sakit/app/models/st_model"
@@ -234,6 +135,28 @@ async def rekomendasi_rumah_sakit(request: HospitalRecommendRequest):
             nama_asuransi=request.nama_asuransi,
             nama_provinsi=request.nama_provinsi,
             nama_daerah=request.nama_daerah,
+            top_n=request.top_n
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+ASURANSI_DATA_PATH = "daftar_asuransi/preprocessed/daftar_asuransi_all.json"
+ASURANSI_INDEX_PATH = "daftar_asuransi/app/embeddings/asuransi_st.index"
+ASURANSI_MODEL_PATH = "daftar_asuransi/app/models/st_model"
+
+asuransi_data = load_json(ASURANSI_DATA_PATH)
+asuransi_index = load_faiss_index(ASURANSI_INDEX_PATH)
+asuransi_model = build_model(ASURANSI_MODEL_PATH)
+
+@app.post("/rekomendasi_asuransi")
+async def rekomendasi_asuransi(request: InsuranceRecommendRequest):
+    try:
+        results = recommend_asuransi(
+            query=request.query,
+            data=asuransi_data,
+            index=asuransi_index,
+            model=asuransi_model,
             top_n=request.top_n
         )
         return {"results": results}
@@ -332,6 +255,71 @@ async def get_slip_rumah_sakit(slip_id: str):
         raise HTTPException(status_code=404, detail="Slip tidak ditemukan")
     return data
 
+keluhan_data_store = {}
+
+@app.post("/keluhanmu_bisa_diklaim")
+async def analisis_keluhan(
+    keluhan_text: Optional[str] = Form(None),
+    metode_input: Optional[str] = Form("text"),
+    audio_file: Optional[UploadFile] = File(None)
+):
+    """
+    Analisis keluhan kesehatan, input bisa teks atau audio/video.
+    """
+    try:
+        if metode_input == "voice" and audio_file is not None:
+            allowed_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm', '.mp4']
+            file_extension = os.path.splitext(audio_file.filename)[1].lower()
+            if file_extension not in allowed_extensions:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Format file tidak didukung. Gunakan: {', '.join(allowed_extensions)}"
+                )
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+                shutil.copyfileobj(audio_file.file, temp_file)
+                temp_file_path = temp_file.name
+            try:
+                result = analyze_health_complaint_from_audio(temp_file_path)
+                keluhan_input = result.get("transcribed_text", "")
+                metode = "voice" if file_extension != '.mp4' else "video"
+            finally:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+        elif keluhan_text is not None and keluhan_text.strip():
+            result = analyze_health_complaint(keluhan_text)
+            keluhan_input = keluhan_text
+            metode = "text"
+        else:
+            raise HTTPException(status_code=400, detail="Keluhan tidak boleh kosong")
+        
+        keluhan_id = str(uuid.uuid4())[:8]
+        keluhan_data_store[keluhan_id] = {
+            "keluhan_input": keluhan_input,
+            "metode_input": metode,
+            "analisis": {
+                "persentase_kemungkinan_klaim": result.get("persentase_klaim", "Tidak dapat ditentukan"),
+                "kemungkinan_diagnosis": result.get("kemungkinan_diagnosis", []),
+                "rekomendasi_tindakan": result.get("rekomendasi_tindakan", []),
+                "tingkat_urgensi": result.get("tingkat_urgensi", "sedang"),
+                "dokumen_pendukung_diperlukan": result.get("dokumen_pendukung", [])
+            },
+            "disclaimer": "Hasil analisis ini hanya sebagai referensi. Konsultasikan dengan dokter untuk diagnosis yang akurat."
+        }
+        return {
+            "status": "success",
+            "keluhan_id": keluhan_id,
+            **keluhan_data_store[keluhan_id]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error menganalisis keluhan: {str(e)}")
+
+@app.get("/keluhanmu_bisa_diklaim/{keluhan_id}")
+async def get_keluhanmu_bisa_diklaim(keluhan_id: str):
+    data = keluhan_data_store.get(keluhan_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Data keluhan tidak ditemukan")
+    return data
+
 @app.get("/")
 async def root():
     return {
@@ -354,7 +342,10 @@ async def root():
             "isi_data": "/isi_data (POST) - Upload foto KTP & Polis, dan data form lain",
             "bantu_proses_ai": "/bantu_proses_ai (POST) - Cek data isi_data dan saran AI",
             "upload_slip": "/slip_rumah_sakit (POST) - Upload slip rumah sakit dan ekstrak data",
-            "get_slip": "/slip_rumah_sakit/{slip_id} (GET) - Ambil data slip rumah sakit berdasarkan ID"
+            "get_slip": "/slip_rumah_sakit/{slip_id} (GET) - Ambil data slip rumah sakit berdasarkan ID",
+            "get_keluhan": "/keluhanmu_bisa_diklaim/{keluhan_id} (GET) - Ambil data keluhan berdasarkan ID",
+            "rekomendasi_rumah_sakit": "/rekomendasi_rumah_sakit (POST) - Rekomendasi rumah sakit",
+            "rekomendasi_asuransi": "/rekomendasi_asuransi (POST) - Rekomendasi asuransi"
         },
         "setup": {
             "rag_documents": "Letakkan file PDF asuransi di folder: ./rag/documents/",

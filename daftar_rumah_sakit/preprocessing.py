@@ -23,14 +23,14 @@ def stopword_removal(text: str) -> str:
 def stemming(text: str) -> str:
     return stemmer_id.stem(text)
 
-def remove_html_tags(text: str) -> str:
-    return re.sub(r'<[^>]+>', '', text)
+# def remove_html_tags(text: str) -> str:
+#     return re.sub(r'<[^>]+>', '', text)
 
-def preprocessing_id(text: str, remove_html: bool=True, do_stemming: bool=True) -> str:
+def preprocessing_id(text: str, do_stemming: bool=True) -> str:
     if not isinstance(text, str):
         return ""
-    if remove_html:
-        text = remove_html_tags(text)
+    # if remove_html:
+    #     text = remove_html_tags(text)
     text = lowering(text)
     text = remove_punctuation_and_symbol(text)
     text = stopword_removal(text)

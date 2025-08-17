@@ -10,7 +10,6 @@ def recommend_hospitals(
     nama: str,
     kelurahan_desa: str,
     kecamatan: str,
-    umur: int,
     jenis_layanan: str,
     keluhan: str,
     nama_asuransi: str,
@@ -23,7 +22,7 @@ def recommend_hospitals(
     """
     # Gabungkan semua input jadi satu query
     query_text = (
-        f"{nama} {kelurahan_desa} {kecamatan} umur:{umur} layanan:{jenis_layanan} "
+        f"{nama} {kelurahan_desa} {kecamatan} layanan:{jenis_layanan} "
         f"keluhan:{keluhan} asuransi:{nama_asuransi} provinsi:{nama_provinsi} daerah:{nama_daerah}"
     )
     query_text = preprocessing_id(query_text)
