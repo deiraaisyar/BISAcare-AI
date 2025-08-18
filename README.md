@@ -3,146 +3,113 @@
 ## API Endpoints
 
 ### 1. `/bisabot` (POST)
-**Deskripsi:**  
-Chat dengan BISAbot (chatbot asuransi) yang sudah terintegrasi dengan RAG.
+Chat dengan BISAbot (chatbot asuransi, RAG + Gemini).
 
 **Input:**  
 ```json
-{
-  "question": "Tulis pertanyaan Anda di sini"
-}
+{ "question": "Tulis pertanyaan Anda di sini" }
 ```
 **Output:**  
 ```json
-{
-  "answer": "Jawaban dari BISAbot"
-}
+{ "answer": "Jawaban dari BISAbot" }
 ```
 
 ---
 
 ### 2. `/bisabot/history` (GET)
-**Deskripsi:**  
-Mengambil riwayat chat BISAbot.
+Ambil riwayat chat BISAbot.
 
 **Output:**  
 ```json
-{
-  "history": [
-    {"role": "user", "content": "..."},
-    {"role": "bot", "content": "..."}
-  ]
-}
+{ "history": [ ... ] }
 ```
 
 ---
 
 ### 3. `/bisabot/history` (DELETE)
-**Deskripsi:**  
-Menghapus seluruh riwayat chat BISAbot.
+Hapus seluruh riwayat chat BISAbot.
 
 **Output:**  
 ```json
-{
-  "message": "Chat history cleared successfully"
-}
+{ "message": "Chat history cleared successfully" }
 ```
 
 ---
 
 ### 4. `/surat_aju_banding` (POST)
-**Deskripsi:**  
-Generate surat aju banding asuransi dalam format PDF.
+Generate surat aju banding asuransi (PDF).
 
 **Input:**  
 ```json
 {
-  "nama": "Nama Lengkap",
-  "no_polis": "Nomor Polis",
-  "alamat": "Alamat Lengkap",
-  "no_telepon": "Nomor Telepon",
-  "tanggal_pengajuan": "YYYY-MM-DD",
-  "nomor_klaim": "Nomor Klaim",
-  "perihal_klaim": "Perihal Klaim",
-  "alasan_penolakan": "Alasan Penolakan Klaim",
-  "alasan_banding": "Alasan Banding",
-  "nama_perusahaan_asuransi": "Nama Perusahaan Asuransi"
+  "nama": "...",
+  "nomor_polis": "...",
+  "alamat": "...",
+  "nomor_hp": "...",
+  "tanggal_pengajuan": "...",
+  "nomor_klaim": "...",
+  "perihal_klaim": "...",
+  "alasan_penolakan": "...",
+  "alasan_banding": "...",
+  "nama_asuransi": "..."
 }
 ```
 **Output:**  
 ```json
 {
   "message": "Surat aju banding berhasil dibuat",
-  "filename": "surat_aju_banding_xxxxxxxx.pdf",
-  "download_url": "/download/surat_aju_banding_xxxxxxxx.pdf"
+  "filename": "...pdf",
+  "download_url": "/download/..."
 }
 ```
 
 ---
 
 ### 5. `/rekomendasi_rumah_sakit` (POST)
-**Deskripsi:**  
-Rekomendasi rumah sakit berdasarkan data user dan asuransi.
+Rekomendasi rumah sakit berdasarkan data user.
 
 **Input:**  
 ```json
 {
-  "nama": "Nama",
-  "kelurahan_desa": "Kelurahan/Desa",
-  "kecamatan": "Kecamatan",
-  "jenis_layanan": "Rawat Inap/Rawat Jalan",
-  "keluhan": "Keluhan kesehatan",
-  "nama_asuransi": "Nama Asuransi",
-  "nama_provinsi": "Nama Provinsi",
-  "nama_daerah": "Nama Daerah",
+  "nama": "...",
+  "kelurahan_desa": "...",
+  "kecamatan": "...",
+  "jenis_layanan": "...",
+  "keluhan": "...",
+  "nama_asuransi": "...",
+  "nama_provinsi": "...",
+  "nama_daerah": "...",
   "top_n": 5
 }
 ```
 **Output:**  
 ```json
-{
-  "results": [ ... ]
-}
+{ "results": [ ... ] }
 ```
 
 ---
 
 ### 6. `/rekomendasi_asuransi` (POST)
-**Deskripsi:**  
-Rekomendasi produk asuransi berdasarkan query user.
+Rekomendasi produk asuransi.
 
 **Input:**  
 ```json
-{
-  "query": "Saya ingin asuransi kesehatan keluarga",
-  "top_n": 5
-}
+{ "query": "...", "top_n": 5 }
 ```
 **Output:**  
 ```json
-{
-  "results": [ ... ]
-}
+{ "results": [ ... ] }
 ```
 
 ---
 
 ### 7. `/download/{filename}` (GET)
-**Deskripsi:**  
 Download file PDF hasil generate surat aju banding.
-
-**Input:**  
-- Path parameter: `filename` (nama file PDF)
-
-**Output:**  
-- File PDF sebagai response.
 
 ---
 
 ### 8. `/isi_data` (POST)
-**Deskripsi:**  
-Upload foto KTP & Polis, plus data form lain.  
-Output: hasil OCR & parsing + data form.
+Upload foto KTP & Polis, plus data form lain.
 
 **Input:**  
 - Form-data:
@@ -160,7 +127,7 @@ Output: hasil OCR & parsing + data form.
   "polis": { ... },
   "raw_text": "...",
   "nomor_polis": "...",
-  "jenis_layanan": "...",
+  "layanan": "...",
   "nomor_hp": "...",
   "keluhan": "..."
 }
@@ -169,19 +136,11 @@ Output: hasil OCR & parsing + data form.
 ---
 
 ### 9. `/bantu_proses_ai` (POST)
-**Deskripsi:**  
-Cek data hasil isi_data dan memberi saran AI untuk langkah selanjutnya.
+Cek data hasil isi_data dan memberi saran AI.
 
 **Input:**  
 ```json
-{
-  "ktp": { ... },
-  "polis": { ... },
-  "nomor_polis": "...",
-  "jenis_layanan": "...",
-  "nomor_hp": "...",
-  "keluhan": "..."
-}
+{ ...isi_data }
 ```
 **Output:**  
 ```json
@@ -196,7 +155,6 @@ Cek data hasil isi_data dan memberi saran AI untuk langkah selanjutnya.
 ---
 
 ### 10. `/slip_rumah_sakit` (POST)
-**Deskripsi:**  
 Upload slip rumah sakit, ekstrak data penting dengan AI.
 
 **Input:**  
@@ -214,7 +172,6 @@ Upload slip rumah sakit, ekstrak data penting dengan AI.
 ---
 
 ### 11. `/slip_rumah_sakit/{slip_id}` (GET)
-**Deskripsi:**  
 Ambil hasil ekstraksi slip rumah sakit berdasarkan slip_id.
 
 **Output:**  
@@ -229,13 +186,12 @@ Ambil hasil ekstraksi slip rumah sakit berdasarkan slip_id.
 ---
 
 ### 12. `/keluhanmu_bisa_diklaim` (POST)
-**Deskripsi:**  
-Analisis keluhan kesehatan, input bisa teks atau audio/video.
+Analisis keluhan kesehatan, input bisa teks atau audio.
 
 **Input:**  
 - Form-data:
   - `keluhan_text` (string, optional)
-  - `metode_input` (string, default: "text")
+  - `metode_input` (string, default: "text" atau "voice")
   - `audio_file` (file, optional)
 
 **Output:**  
@@ -259,7 +215,6 @@ Analisis keluhan kesehatan, input bisa teks atau audio/video.
 ---
 
 ### 13. `/keluhanmu_bisa_diklaim/{keluhan_id}` (GET)
-**Deskripsi:**  
 Ambil data keluhan berdasarkan ID.
 
 **Output:**  
@@ -274,19 +229,71 @@ Ambil data keluhan berdasarkan ID.
 
 ---
 
-### 14. `/` (GET)
-**Deskripsi:**  
-Root endpoint, menampilkan deskripsi singkat API dan daftar fitur.
+### 14. `/hasil_diagnosis_dokter` (POST)
+Terima hasil diagnosis dokter melalui foto, text, atau audio.
+
+**Input:**  
+- Form-data:
+  - `foto_diagnosis` (file, optional)
+  - `diagnosis_text` (string, optional)
+  - `diagnosis_audio` (file, optional)
 
 **Output:**  
 ```json
 {
-  "message": "Welcome to BISAcare - AI-Powered Insurance Assistant",
-  "features": { ... },
-  "endpoints": { ... },
-  "setup": { ... }
+  "status": "success",
+  "hasil_diagnosis": {
+    "foto_diagnosis": "...hasil OCR...",
+    "diagnosis_text": "...text manual...",
+    "diagnosis_audio": "...hasil transkripsi audio..."
+  }
 }
 ```
+
+---
+
+### 15. `/tanggungan_ai` (POST)
+Analisis tanggungan asuransi berdasarkan data isi_data dan hasil diagnosis dokter (menggunakan Gemini/AI).
+
+**Input:**  
+```json
+{
+  "isi_data": { ... },
+  "hasil_diagnosis": { ... }
+}
+```
+**Output:**  
+```json
+{
+  "status": "success",
+  "analisis_tanggungan": "...",
+  "isi_data": { ... },
+  "hasil_diagnosis": { ... }
+}
+```
+
+---
+
+### 16. `/scan_data_slip` (POST)
+Upload foto slip rumah sakit (gambar) dan/atau audio slip (suara), baca teks slip dengan OCR dan transkripsi suara.
+
+**Input:**  
+- Form-data:
+  - `foto_slip` (file, optional)
+  - `audio_slip` (file, optional)
+
+**Output:**  
+```json
+{
+  "slip_text": "...",           // hasil OCR gambar slip
+  "slip_audio_text": "..."      // hasil transkripsi audio slip
+}
+```
+
+---
+
+### 17. `/` (GET)
+Root endpoint, menampilkan deskripsi singkat API dan daftar fitur.
 
 ---
 
@@ -294,5 +301,4 @@ Root endpoint, menampilkan deskripsi singkat API dan daftar fitur.
 
 - Letakkan file PDF asuransi untuk RAG di folder: `./rag/documents/`
 - Format audio yang didukung: mp3, wav, m4a, flac, ogg, webm, mp4
-
----
+- Untuk OCR, pastikan Tesseract sudah terinstall di
