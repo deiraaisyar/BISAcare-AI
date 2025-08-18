@@ -9,6 +9,8 @@ from features.data_asuransi_ai.scan_data import extract_text, parse_with_ai
 from features.bantu_proses_ai.bantu_proses_ai import cek_data_isi_data
 from features.slip_rumah_sakit.slip_rumah_sakit import extract_text, parse_slip_with_ai
 from features.insurance_recommender.insurance_recommender import load_asuransi_data, recommend_asuransi
+from features.hasil_diagnosis_dokter.hasil_diagnosis_dokter import process_diagnosis
+from features.tanggungan_ai.tanggungan_ai import analisis_tanggungan_ai
 from daftar_rumah_sakit.data_processing import load_faiss_index, load_json, build_model
 import os
 import uuid
@@ -16,6 +18,8 @@ import tempfile
 import shutil
 from typing import Optional
 import logging
+from features.data_asuransi_ai_slip.data_asuransi_ai_slip import extract_slip_text
+import whisper
 
 app = FastAPI(title="BISAcare - AI-Powered Insurance Assistant")
 logger = logging.getLogger("uvicorn.error")
@@ -25,15 +29,15 @@ class Query(BaseModel):
 
 class SuratAjuBandingRequest(BaseModel):
     nama: str
-    no_polis: str
+    nomor_polis: str           # Ubah dari no_polis
     alamat: str
-    no_telepon: str
+    nomor_hp: str              # Ubah dari no_telepon
     tanggal_pengajuan: str
     nomor_klaim: str
     perihal_klaim: str
     alasan_penolakan: str
     alasan_banding: str
-    nama_perusahaan_asuransi: str
+    nama_asuransi: str         # Ubah dari nama_perusahaan_asuransi
 
 class KeluhanRequest(BaseModel):
     keluhan_text: str
@@ -72,7 +76,7 @@ async def clear_history():
     clear_chat_history()
     return {"message": "Chat history cleared successfully"}
 
-@app.post("/surat_aju_banding")
+@app.post("/surat_aju_banding") #OK
 async def buat_surat_banding(request: SuratAjuBandingRequest):
     try:
         unique_id = str(uuid.uuid4())[:8]
@@ -80,15 +84,15 @@ async def buat_surat_banding(request: SuratAjuBandingRequest):
         
         buat_surat_aju_banding_pdf(
             nama=request.nama,
-            no_polis=request.no_polis,
+            no_polis=request.nomor_polis,              
             alamat=request.alamat,
-            no_telepon=request.no_telepon,
+            no_telepon=request.nomor_hp,              
             tanggal_pengajuan=request.tanggal_pengajuan,
             nomor_klaim=request.nomor_klaim,
             perihal_klaim=request.perihal_klaim,
             alasan_penolakan=request.alasan_penolakan,
             alasan_banding=request.alasan_banding,
-            nama_perusahaan_asuransi=request.nama_perusahaan_asuransi,
+            nama_perusahaan_asuransi=request.nama_asuransi, 
             nama_file_output=nama_file
         )
         
@@ -155,7 +159,8 @@ async def rekomendasi_asuransi(request: InsuranceRecommendRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
-@app.get("/download/{filename}")
+# Download surat aju banding
+@app.get("/download/{filename}") #OK
 async def download_file(filename: str):
     file_path = f"./{filename}"
     
@@ -173,7 +178,7 @@ async def isi_data(
     foto_ktp: UploadFile = File(...),
     foto_polis: UploadFile = File(...),
     nomor_polis: str = Form(...),
-    jenis_layanan: str = Form(...),  # Ubah dari pilih_layanan
+    jenis_layanan: str = Form(...), 
     nomor_hp: str = Form(...),
     input_keluhan: str = Form(...)
 ):
@@ -189,7 +194,6 @@ async def isi_data(
     polis_raw_text = extract_text(polis_bytes)
     polis_parsed = parse_with_ai(polis_raw_text)
 
-    # Hapus jenis_layanan dari polis
     if isinstance(polis_parsed, dict) and "jenis_layanan" in polis_parsed:
         polis_parsed.pop("jenis_layanan")
 
@@ -314,6 +318,90 @@ async def get_keluhanmu_bisa_diklaim(keluhan_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Data keluhan tidak ditemukan")
     return data
+
+@app.post("/hasil_diagnosis_dokter")
+async def hasil_diagnosis_dokter(
+    foto_diagnosis: UploadFile = File(None),
+    diagnosis_text: str = Form(None),
+    diagnosis_audio: UploadFile = File(None)
+):
+    """
+    Terima hasil diagnosis dokter melalui foto, text, atau voice over.
+    """
+    result = {}
+
+    # 1. Jika ada foto diagnosis
+    if foto_diagnosis is not None:
+        image_bytes = await foto_diagnosis.read()
+        # Proses OCR atau parsing gambar di sini
+        result["foto_diagnosis"] = process_diagnosis(image_bytes=image_bytes)
+
+    # 2. Jika ada text diagnosis
+    if diagnosis_text is not None and diagnosis_text.strip():
+        # Proses text diagnosis di sini
+        result["diagnosis_text"] = process_diagnosis(text=diagnosis_text)
+
+    # 3. Jika ada audio diagnosis
+    if diagnosis_audio is not None:
+        audio_path = f"/tmp/{diagnosis_audio.filename}"
+        with open(audio_path, "wb") as f:
+            f.write(await diagnosis_audio.read())
+        # Proses transkripsi audio di sini
+        result["diagnosis_audio"] = process_diagnosis(audio_path=audio_path)
+        os.remove(audio_path)
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Harus upload foto, isi text, atau voice diagnosis dokter.")
+
+    return {
+        "status": "success",
+        "hasil_diagnosis": result
+    }
+
+@app.post("/tanggungan_ai")
+async def tanggungan_ai_endpoint(
+    isi_data: dict = Body(...),
+    hasil_diagnosis: dict = Body(...)
+):
+    """
+    Analisis tanggungan asuransi berdasarkan data isi_data dan hasil diagnosis dokter (menggunakan Gemini/AI).
+    """
+    result = analisis_tanggungan_ai(isi_data=isi_data, hasil_diagnosis=hasil_diagnosis)
+    return result
+
+@app.post("/scan_data_slip")
+async def scan_data_slip(
+    foto_slip: UploadFile = File(None),
+    audio_slip: UploadFile = File(None)
+):
+    """
+    Upload foto slip rumah sakit (gambar) dan/atau audio slip (suara), baca teks slip dengan OCR dan transkripsi suara.
+    """
+    result = {}
+
+    # Proses gambar slip dengan OCR
+    if foto_slip is not None:
+        image_bytes = await foto_slip.read()
+        slip_text = extract_slip_text(image_bytes)
+        result["slip_text"] = slip_text
+
+    # Proses audio slip dengan OpenAI Whisper
+    if audio_slip is not None:
+        audio_path = f"/tmp/{audio_slip.filename}"
+        with open(audio_path, "wb") as f:
+            f.write(await audio_slip.read())
+        try:
+            model = whisper.load_model("base")
+            transcribe_result = model.transcribe(audio_path, language="indonesian")
+            result["slip_audio_text"] = transcribe_result["text"]
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Harus upload foto slip atau audio slip.")
+
+    return result
 
 @app.get("/")
 async def root():
