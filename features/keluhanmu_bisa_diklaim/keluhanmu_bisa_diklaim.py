@@ -6,7 +6,7 @@ import re
 import tempfile
 import shutil
 import logging
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from transformers import WhisperProcessor, WhisperForConditionalGeneration, pipeline
 import torch
 import librosa
 import whisper
@@ -35,9 +35,12 @@ Berdasarkan keluhan yang diberikan, berikan analisis dalam format JSON:
 
 Berikan jawaban yang akurat dan profesional. Persentase klaim harus berupa satu angka pasti, bukan rentang atau 'sampai dengan'. Contoh: 80, 90, 90.5, 10."""
 
+# Ganti fungsi transcribe_audio agar pakai pipeline Whisper Transformers
+pipe = pipeline("automatic-speech-recognition", model="ayaayaa/whisper-finetuned-id")
+
 def transcribe_audio(audio_file_path):
     """
-    Convert audio file to text using OpenAI Whisper (local) model
+    Convert audio file to text using HuggingFace Whisper pipeline (ayaayaa/whisper-finetuned-id)
     """
     try:
         logger.info(f"Audio file path received: {audio_file_path}")
@@ -47,14 +50,29 @@ def transcribe_audio(audio_file_path):
         logger.info(f"File size: {file_size} bytes")
         if file_size == 0:
             raise Exception("Audio file is empty")
-        # Load OpenAI Whisper model (choose 'base', 'small', 'medium', 'large', etc)
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_file_path)
-        transcription = result["text"]
-        logger.info(f"OpenAI Whisper transcription result: '{transcription}'")
+
+        import soundfile as sf
+        import librosa
+        import torch
+
+        # Load audio
+        audio, sr = sf.read(audio_file_path)
+        # Resample to 16kHz if needed
+        if sr != 16000:
+            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+            sr = 16000
+
+        # Use Whisper pipeline components directly for robust inference
+        with torch.no_grad():
+            inputs = pipe.feature_extractor(audio, sampling_rate=sr, return_tensors="pt").input_features
+            result = pipe.model.generate(inputs)
+            text = pipe.tokenizer.batch_decode(result, skip_special_tokens=True)
+
+        transcription = text[0] if isinstance(text, list) and len(text) > 0 else ""
+        logger.info(f"Whisper pipeline transcription result: '{transcription}'")
         return transcription.strip()
     except Exception as e:
-        logger.error(f"Error in OpenAI Whisper transcribe_audio: {str(e)}")
+        logger.error(f"Error in pipeline transcribe_audio: {str(e)}")
         raise Exception(f"Error transcribing audio: {str(e)}")
 
 def analyze_health_complaint(keluhan_text):

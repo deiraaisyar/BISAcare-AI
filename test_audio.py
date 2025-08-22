@@ -1,18 +1,21 @@
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+import soundfile as sf
 import librosa
 import torch
+from transformers import pipeline
 
-model_id = "ayaayaa/whisper_finetuning_id"
-processor = WhisperProcessor.from_pretrained(model_id)
-model = WhisperForConditionalGeneration.from_pretrained(model_id)
+# baca audio
+audio, sr = sf.read("WhatsApp Audio 2025-08-17 at 23.48.36.mp3")
 
-# load audio
-audio, sr = librosa.load("WhatsApp Audio 2025-08-17 at 23.48.36.mp3", sr=16000)
-inputs = processor(audio, sampling_rate=sr, return_tensors="pt")
+# resample ke 16k
+if sr != 16000:
+    audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+    sr = 16000
 
-# generate
+pipe = pipeline("automatic-speech-recognition", model="ayaayaa/whisper-finetuned-id")
+
 with torch.no_grad():
-    predicted_ids = model.generate(**inputs)
+    inputs = pipe.feature_extractor(audio, sampling_rate=sr, return_tensors="pt").input_features
+    result = pipe.model.generate(inputs)
+    text = pipe.tokenizer.batch_decode(result, skip_special_tokens=True)
 
-text = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
-print("Transkripsi (manual):", text)
+print(text)
