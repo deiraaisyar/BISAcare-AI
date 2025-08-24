@@ -1,5 +1,33 @@
 # BISACare-AI
 
+## Cara Install & Menjalankan Project
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/username/NLXOTI-AI.git
+cd NLXOTI-AI
+```
+
+### 2. Buat dan Aktifkan Virtual Environment
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Jalankan Backend FastAPI
+```bash
+uvicorn main:app --reload
+```
+Akses API di [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
 ## API Endpoints
 
 ### 1. `/bisabot` (POST)
