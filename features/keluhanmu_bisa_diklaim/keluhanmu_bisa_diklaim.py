@@ -9,7 +9,6 @@ import logging
 from transformers import WhisperProcessor, WhisperForConditionalGeneration, pipeline
 import torch
 import librosa
-import whisper
 
 # Setup logging for debugging
 logging.basicConfig(level=logging.INFO)
