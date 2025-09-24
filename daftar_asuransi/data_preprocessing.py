@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from daftar_rumah_sakit.preprocessing import preprocessing_id
 
-from PyPDF2 import PdfReader  # pastikan sudah install: pip install PyPDF2
+from PyPDF2 import PdfReader 
 
 def normalize(vectors):
     return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
