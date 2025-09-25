@@ -20,25 +20,26 @@ from features_fixed.ai_claim_denial import claim_denial_chatbot
 from features_fixed.generate_ajubanding import buat_surat_aju_banding_pdf
 from datetime import datetime
 from features_fixed.diagnosis_text import diagnosis_text_pipeline
+from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
+
+# Load Hugging Face model
+hospital_model = SentenceTransformer("ayaayaa/hospital-recommender")
+asuransi_model = SentenceTransformer("ayaayaa/insurance-recommender")
 
 # Rumah sakit data dan model paths
 DATA_PATH = "daftar_rumah_sakit/preprocessed/daftar_rumah_sakit_all.json"
 INDEX_PATH = "daftar_rumah_sakit/app/embeddings/hospital_st.index"
-MODEL_PATH = "daftar_rumah_sakit/app/models/st_model"
 
 hospital_data = load_json(DATA_PATH)
 hospital_index = load_faiss_index(INDEX_PATH)
-hospital_model = build_model(MODEL_PATH)
 
 ASURANSI_DATA_PATH = "daftar_asuransi/preprocessed/daftar_asuransi_all.json"
 ASURANSI_INDEX_PATH = "daftar_asuransi/app/embeddings/asuransi_st.index"
-ASURANSI_MODEL_PATH = "daftar_asuransi/app/models/st_model"
 
 asuransi_data = load_json(ASURANSI_DATA_PATH)
 asuransi_index = load_faiss_index(ASURANSI_INDEX_PATH)
-asuransi_model = build_model(ASURANSI_MODEL_PATH)
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
