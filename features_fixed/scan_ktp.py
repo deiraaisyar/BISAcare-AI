@@ -1,14 +1,31 @@
 import base64
-import os
+import os, json
 import re
 from google.cloud import documentai_v1 as documentai
-
-GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credential.json")
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
+from google.oauth2 import service_account
 
 PROJECT_ID = "1081333106174"
 LOCATION = "us"
 PROCESSOR_ID = "d788d904b365af4"
+
+def get_docai_client():
+    credentials = None
+
+    gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+    if gac and gac.startswith("{"):
+        # Cloud Run secret sebagai ENV VAR JSON string
+        creds_info = json.loads(gac)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    elif gac:
+        # Lokal atau Cloud Run secret file
+        credentials = service_account.Credentials.from_service_account_file(gac)
+    else:
+        # fallback lokal file
+        credentials = service_account.Credentials.from_service_account_file("credential.json")
+
+    return documentai.DocumentProcessorServiceClient(credentials=credentials)
+
 
 def fallback_parse_raw(raw_text, field_name):
     # Contoh sederhana, bisa disesuaikan dengan format raw
@@ -36,7 +53,7 @@ def fallback_parse_raw(raw_text, field_name):
 
 def scan_ktp_pipeline(image_base64: str) -> dict:
     """Pipeline OCR KTP menggunakan Google Document AI"""
-    client = documentai.DocumentProcessorServiceClient()
+    client = get_docai_client()
     image_bytes = base64.b64decode(image_base64)
 
     # Build resource name
@@ -79,3 +96,5 @@ def scan_ktp_pipeline(image_base64: str) -> dict:
         "raw": doc.text
     }
     return parsed
+
+

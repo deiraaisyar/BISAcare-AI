@@ -1,17 +1,27 @@
 import base64
 import os
+import json
 from google.cloud import documentai_v1 as documentai
-
-GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credential.json")
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
+from google.oauth2 import service_account
 
 PROJECT_ID = "1081333106174"
 LOCATION = "us"
 PROCESSOR_ID = "171bdbf2140012bd"
 
+def get_docai_client():
+    gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if gac and gac.startswith("{"):
+        creds_info = json.loads(gac)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    elif gac:
+        credentials = service_account.Credentials.from_service_account_file(gac)
+    else:
+        credentials = service_account.Credentials.from_service_account_file("credential.json")
+    return documentai.DocumentProcessorServiceClient(credentials=credentials)
+
 def scan_asuransi_pipeline(image_base64: str) -> dict:
     """Pipeline OCR Asuransi menggunakan Google Document AI"""
-    client = documentai.DocumentProcessorServiceClient()
+    client = get_docai_client()
     image_bytes = base64.b64decode(image_base64)
 
     # Build resource name

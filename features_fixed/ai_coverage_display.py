@@ -1,10 +1,13 @@
 import os
-import requests
 import logging
 from dotenv import load_dotenv
+import google.generativeai as genai
+from google.oauth2 import service_account
+import re
+import json
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_CREDENTIAL_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 SYSTEM_PROMPT = """
 Anda adalah AI Coverage Assistant untuk asuransi kesehatan.
@@ -38,34 +41,36 @@ Contoh output:
 }
 """
 
+def get_gemini_model():
+    if GEMINI_CREDENTIAL_JSON and GEMINI_CREDENTIAL_JSON.startswith("{"):
+        import json as _json
+        creds_info = _json.loads(GEMINI_CREDENTIAL_JSON)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    else:
+        credentials = service_account.Credentials.from_service_account_file(GEMINI_CREDENTIAL_JSON or "credential.json")
+    genai.configure(credentials=credentials)
+    return genai.GenerativeModel("gemini-2.5-flash")  # ganti sesuai model kamu
+
 def coverage_ai_pipeline(diagnosis: dict, asuransi: dict, invoice: dict, extra: dict = None) -> dict:
-    """
-    Mengisi coverage/tanggungan asuransi berdasarkan data diagnosis, asuransi, invoice, dan data lain.
-    """
-    # Gabungkan semua data jadi satu prompt
     prompt = SYSTEM_PROMPT + "\n\nData diagnosis dokter:\n" + str(diagnosis)
     prompt += "\n\nData asuransi:\n" + str(asuransi)
     prompt += "\n\nData invoice:\n" + str(invoice)
     if extra:
         prompt += "\n\nData tambahan:\n" + str(extra)
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [
-            {"parts": [{"text": prompt}]}
-        ]
-    }
-    params = {"key": GEMINI_API_KEY}
     try:
-        response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
-        response.raise_for_status()
-        result_text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        # Bersihkan backticks jika ada
-        import re, json
-        clean_text = re.sub(r'```json', '', result_text, flags=re.IGNORECASE)
-        clean_text = re.sub(r'```', '', clean_text).strip()
-        return json.loads(clean_text)
+        model = get_gemini_model()
+        response = model.generate_content(prompt)
+        result_text = response.text.strip()
+        print("=== AI OUTPUT ===")
+        print(result_text)
+        # Ambil hanya blok JSON dari output
+        match = re.search(r'\{[\s\S]*\}', result_text)
+        if match:
+            clean_text = match.group(0)
+            return json.loads(clean_text)
+        else:
+            raise ValueError("Tidak ditemukan blok JSON pada output AI")
     except Exception as e:
         logging.error(f"Error in coverage_ai_pipeline: {str(e)}")
         # Fallback jika gagal

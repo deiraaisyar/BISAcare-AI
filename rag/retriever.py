@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from langchain.schema import Document
 from .loader import DocumentLoader
 import pickle
+from huggingface_hub import hf_hub_download
 
 logger = logging.getLogger(__name__)
 
@@ -14,31 +15,29 @@ class SimpleRAGRetriever:
     def __init__(self, 
                  documents_path: str = "./rag/documents",
                  embeddings_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-                 index_path: str = "./rag/index"):
-        
+                 index_path: str = "./rag/index",
+                 hf_repo: str = None):
         self.documents_path = documents_path
         self.embeddings_model_name = embeddings_model
         self.index_path = index_path
-        
-        # Create index directory if it doesn't exist
+        self.hf_repo = hf_repo  # repo_id di Hugging Face
+
         os.makedirs(index_path, exist_ok=True)
-        
-        # Initialize embedding model
+
         try:
             self.embeddings_model = SentenceTransformer(embeddings_model)
             logger.info("Embedding model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {str(e)}")
             self.embeddings_model = None
-        
-        # Initialize components
+
         self.documents: List[Document] = []
         self.index = None
         self.document_embeddings = None
-        
+
         # Load documents and create index
         self._initialize()
-    
+
     def _save_index(self):
         """Save FAISS index and metadata to disk"""
         try:
@@ -67,15 +66,28 @@ class SimpleRAGRetriever:
             logger.error(f"Error saving index: {str(e)}")
     
     def _load_index(self):
-        """Load FAISS index and metadata from disk"""
+        """Load FAISS index and metadata from disk or Hugging Face Hub"""
         try:
             index_file = os.path.join(self.index_path, "faiss_index.bin")
             metadata_file = os.path.join(self.index_path, "metadata.pkl")
-            
+
+            # Download dari Hugging Face jika repo diberikan
+            if self.hf_repo:
+                index_file = hf_hub_download(
+                    repo_id=self.hf_repo,
+                    filename="faiss_index.bin",
+                    cache_dir=self.index_path
+                )
+                metadata_file = hf_hub_download(
+                    repo_id=self.hf_repo,
+                    filename="metadata.pkl",
+                    cache_dir=self.index_path
+                )
+
             if not os.path.exists(index_file) or not os.path.exists(metadata_file):
                 logger.info("No saved index found")
                 return False
-            
+
             # Load FAISS index
             self.index = faiss.read_index(index_file)
             
@@ -103,26 +115,21 @@ class SimpleRAGRetriever:
             if not self.embeddings_model:
                 logger.warning("Embedding model not available, RAG disabled")
                 return
-            
-            # Try to load existing index first
+
+            # Langsung load index dari Hugging Face jika hf_repo diberikan
             if self._load_index():
-                logger.info("Loaded existing index")
+                logger.info("Loaded existing index (possibly from Hugging Face)")
                 return
-                
-            # Load documents
-            loader = DocumentLoader(self.documents_path)
-            self.documents = loader.load_all_documents()
-            
-            if not self.documents:
-                logger.warning("No documents found, RAG will not work")
-                return
-            
-            # Create embeddings and index
-            self._create_index()
-            
-            # Save the index for future use
-            self._save_index()
-            
+
+            # Jika tidak ada index, baru load dokumen lokal (opsional)
+            if self.documents_path:
+                loader = DocumentLoader(self.documents_path)
+                self.documents = loader.load_all_documents()
+                if not self.documents:
+                    logger.warning("No documents found, RAG will not work")
+                    return
+                self._create_index()
+                self._save_index()
         except Exception as e:
             logger.error(f"Error initializing RAG: {str(e)}")
     
@@ -305,3 +312,10 @@ class SimpleRAGRetriever:
         except Exception as e:
             logger.error(f"Error refreshing index: {str(e)}")
             return False
+
+retriever = SimpleRAGRetriever(
+    documents_path="./rag/documents",
+    embeddings_model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    index_path="./rag/index",
+    hf_repo="ayaayaa/rag-index-metadata"
+)

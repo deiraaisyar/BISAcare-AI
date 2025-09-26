@@ -1,10 +1,11 @@
 import os
-import requests
 import logging
 from dotenv import load_dotenv
+import google.generativeai as genai
+from google.oauth2 import service_account
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_CREDENTIAL_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 SYSTEM_PROMPT = """
 Anda adalah AI Claim Denial Rewriter, asisten AI yang membantu user memahami alasan penolakan klaim asuransi dan memberi saran langkah selanjutnya.
@@ -15,6 +16,18 @@ INSTRUKSI:
 - Jika klaim ditolak, berikan alasan penolakan dan langkah-langkah yang bisa dilakukan user untuk banding atau melengkapi dokumen.
 - Jawab dalam format chatbot, gunakan sapaan dan instruksi singkat.
 """
+
+def get_gemini_model():
+    if GEMINI_CREDENTIAL_JSON and GEMINI_CREDENTIAL_JSON.startswith("{"):
+        import json
+        creds_info = json.loads(GEMINI_CREDENTIAL_JSON)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    else:
+        credentials = service_account.Credentials.from_service_account_file(GEMINI_CREDENTIAL_JSON or "credential.json")
+
+    # Hapus client_options, cukup credentials saja
+    genai.configure(credentials=credentials)
+    return genai.GenerativeModel("gemini-2.5-flash")
 
 def check_missing_fields(data: dict, required_fields: list) -> list:
     missing = []
@@ -35,7 +48,6 @@ def claim_denial_chatbot(user_message: str, claim_data: dict, required_fields: l
         )
         return feedback
 
-    # Jika tidak ada data kurang, gunakan Gemini untuk analisis penolakan dan saran
     prompt = (
         SYSTEM_PROMPT +
         "\n\nData klaim user:\n" + str(claim_data) +
@@ -43,18 +55,10 @@ def claim_denial_chatbot(user_message: str, claim_data: dict, required_fields: l
         "\n\nBerikan alasan penolakan (jika ada) dan saran langkah selanjutnya."
     )
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [
-            {"parts": [{"text": prompt}]}
-        ]
-    }
-    params = {"key": GEMINI_API_KEY}
     try:
-        response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
-        response.raise_for_status()
-        result_text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        model = get_gemini_model()
+        response = model.generate_content(prompt)
+        result_text = response.text.strip()
         return result_text
     except Exception as e:
         logging.error(f"Error in claim_denial_chatbot: {str(e)}")

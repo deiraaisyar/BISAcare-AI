@@ -1,27 +1,26 @@
 import os
 import logging
-import requests
 import re
 import json
 from dotenv import load_dotenv
+import google.generativeai as genai
+from google.oauth2 import service_account
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_CREDENTIAL_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 SYSTEM_PROMPT = """
 Anda adalah Asisten Rumah Sakit bagian Asuransi.
 Tugas Anda:
 - Membantu menilai keluhan pasien terkait klaim asuransi.
+- Output WAJIB berupa JSON valid, tanpa penjelasan tambahan, tanpa kata 'Health Anda' di setiap poin.
 - Berikan output berupa:
   1. persentase_kondisi_dapat_diklaim (angka dalam %)
   2. kemungkinan_diagnosis (poin-poin)
   3. rekomendasi_tindakan (poin-poin)
   4. dokumen_pendukung_klaim (poin-poin)
-- Gunakan bahasa profesional, jelas, dan ramah.
-- Buat poin-poin yang mudah dibaca dan dipahami.
-- Jika ada ketidakpastian, berikan catatan agar pasien memverifikasi ke pihak rumah sakit.
-- Output harus JSON valid.
-Contoh output yang benar:
+- Output hanya JSON, tanpa kata lain.
+Contoh output:
 {
   "persentase_kondisi_dapat_diklaim": 85,
   "kemungkinan_diagnosis": ["Penyakit jantung koroner", "Hipertensi"],
@@ -37,23 +36,23 @@ FALLBACK = {
     "dokumen_pendukung_klaim": ["Konsultasikan ke administrasi rumah sakit."]
 }
 
+def get_gemini_model():
+    if GEMINI_CREDENTIAL_JSON and GEMINI_CREDENTIAL_JSON.startswith("{"):
+        import json
+        creds_info = json.loads(GEMINI_CREDENTIAL_JSON)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    else:
+        credentials = service_account.Credentials.from_service_account_file(GEMINI_CREDENTIAL_JSON or "credential.json")
+    genai.configure(credentials=credentials)
+    return genai.GenerativeModel("gemini-2.5-flash")  
+
 def process_keluhan(text_keluhan: str):
     prompt = f"{SYSTEM_PROMPT}\n\nKeluhan pasien:\n{text_keluhan}"
 
     try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
-        headers = {"Content-Type": "application/json"}
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        params = {"key": GEMINI_API_KEY}
-
-        response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
-        response.raise_for_status()
-        result_json_raw = response.json()
-
-        print("=== RAW GEMINI RESPONSE ===")
-        print(result_json_raw)
-
-        result_text = result_json_raw["candidates"][0]["content"]["parts"][0]["text"].strip()
+        model = get_gemini_model()
+        response = model.generate_content(prompt)
+        result_text = response.text.strip()
 
         print("=== AI TEXT ===")
         print(result_text)
@@ -81,18 +80,13 @@ def process_keluhan(text_keluhan: str):
         logging.error(f"Error in process_keluhan: {str(e)}")
         return FALLBACK
 
-
 def parse_text_response(text: str):
-    """
-    Ambil persentase + bullet points dari teks bebas AI
-    """
     persentase = re.search(r'(\d+)%', text)
     persentase = int(persentase.group(1)) if persentase else 0
-    bullets = re.findall(r'[-•]\s*(.+)', text)
+    bullets = [b for b in re.findall(r'[-•]\s*(.+)', text) if "Health Anda" not in b]
     diagnosis = bullets[0:2] if len(bullets) >= 2 else ["Tidak dapat menentukan."]
     tindakan = bullets[2:4] if len(bullets) >= 4 else ["Hubungi pihak rumah sakit atau customer service."]
     dokumen = bullets[4:6] if len(bullets) >= 6 else ["Konsultasikan ke administrasi rumah sakit."]
-
     return {
         "persentase_kondisi_dapat_diklaim": persentase,
         "kemungkinan_diagnosis": diagnosis,

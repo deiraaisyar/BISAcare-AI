@@ -1,10 +1,13 @@
 import os
-import requests
 import logging
 from dotenv import load_dotenv
+import google.generativeai as genai
+from google.oauth2 import service_account
+import re
+import json
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_CREDENTIAL_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 SYSTEM_PROMPT = """
 Anda adalah AI Diagnosis Extractor. 
@@ -20,25 +23,25 @@ Output harus JSON valid dengan field:
 Jika data tidak tersedia, isi dengan string kosong atau list kosong.
 """
 
+def get_gemini_model():
+    if GEMINI_CREDENTIAL_JSON and GEMINI_CREDENTIAL_JSON.startswith("{"):
+        import json as _json
+        creds_info = _json.loads(GEMINI_CREDENTIAL_JSON)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    else:
+        credentials = service_account.Credentials.from_service_account_file(GEMINI_CREDENTIAL_JSON or "credential.json")
+    genai.configure(credentials=credentials)
+    return genai.GenerativeModel("gemini-2.5-flash")  # ganti sesuai model kamu
+
 def diagnosis_text_pipeline(diagnosis_text: str) -> dict:
     prompt = SYSTEM_PROMPT + "\n\nTeks diagnosis:\n" + diagnosis_text
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [
-            {"parts": [{"text": prompt}]}
-        ]
-    }
-    params = {"key": GEMINI_API_KEY}
     try:
-        response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
-        response.raise_for_status()
-        result_text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        import re, json
+        model = get_gemini_model()
+        response = model.generate_content(prompt)
+        result_text = response.text.strip()
         clean_text = re.sub(r'```json', '', result_text, flags=re.IGNORECASE)
         clean_text = re.sub(r'```', '', clean_text).strip()
         result = json.loads(clean_text)
-        # Pastikan raw diisi dengan diagnosis_text
         result["raw"] = diagnosis_text
         return result
     except Exception as e:

@@ -5,7 +5,7 @@ transformers>=4.35.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.22.0
 reportlab>=4.0.0
-python-multipart>=0.0.6
+python-multipart
 torch>=2.0.0
 torchaudio>=2.0.0
 SpeechRecognition>=3.10.0
@@ -22,5 +22,11 @@ openpyxl>=3.1.2
 scipy>=1.10.0
 tensorboard>=2.15.1
 datasets>=2.18.0
-google-cloud-vision
-google-cloud-documentai>=2.18.0
+google-cloud-documentai==2.27.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+sastrawi>=1.0.1
+requests
+Pillow
+google-generativeai==0.8.3
+soundfile>=0.12.1

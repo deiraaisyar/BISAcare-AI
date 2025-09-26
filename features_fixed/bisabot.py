@@ -1,7 +1,8 @@
 import os
 import logging
-import requests
 from dotenv import load_dotenv
+import google.generativeai as genai
+from google.oauth2 import service_account
 
 try:
     from rag.retriever import SimpleRAGRetriever
@@ -11,7 +12,7 @@ except ImportError as e:
     logging.warning(f"RAG components not available: {str(e)}")
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_CREDENTIAL_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 rag_retriever = None
 rag_initialized = False
@@ -25,7 +26,11 @@ def initialize_rag():
         logging.warning("RAG not available - continuing without document retrieval")
         return
     try:
-        rag_retriever = SimpleRAGRetriever()
+        rag_retriever = SimpleRAGRetriever(
+            documents_path=None,  # Tidak perlu dokumen lokal
+            index_path="./rag/index",  # Cache lokal
+            hf_repo="ayaayaa/rag-index-metadata"  # Ganti dengan repo kamu
+        )
         if rag_retriever.is_available():
             logging.info("RAG retriever initialized successfully")
         else:
@@ -49,6 +54,18 @@ Jika Anda tidak yakin tentang informasi tertentu, katakan dengan jujur dan saran
 
 chat_history = []
 
+def get_gemini_model():
+    if GEMINI_CREDENTIAL_JSON and GEMINI_CREDENTIAL_JSON.startswith("{"):
+        import json
+        creds_info = json.loads(GEMINI_CREDENTIAL_JSON)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    else:
+        credentials = service_account.Credentials.from_service_account_file(GEMINI_CREDENTIAL_JSON or "credential.json")
+
+    # Hapus client_options, cukup credentials saja
+    genai.configure(credentials=credentials)
+    return genai.GenerativeModel("gemini-2.5-flash")
+
 def ask_bisabot(user_message):
     global chat_history
     initialize_rag()
@@ -63,18 +80,9 @@ def ask_bisabot(user_message):
         else:
             prompt = f"{SYSTEM_PROMPT}\n\nPertanyaan pengguna: {user_message}\nBerikan jawaban umum tentang asuransi berdasarkan pengetahuan Anda dan sarankan untuk menghubungi customer service untuk informasi detail dan terkini."
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [
-                {"parts": [{"text": prompt}]}
-            ]
-        }
-        params = {"key": GEMINI_API_KEY}
-        response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
-        response.raise_for_status()
-        result_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        assistant_message = result_text.strip()
+        model = get_gemini_model()
+        response = model.generate_content(prompt)
+        assistant_message = response.text.strip()
 
         chat_history.append({"role": "assistant", "content": assistant_message})
         if len(chat_history) > 20:

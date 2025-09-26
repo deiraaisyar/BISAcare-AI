@@ -190,7 +190,7 @@ async def ai_claim_denial(request: ClaimDenialRequest):
     response = claim_denial_chatbot(request.user_message, request.claim_data, required_fields)
     return {"answer": response}
 
-@app.post("/surat_aju_banding", response_model=SuratAjuBandingResponse)
+@app.post("/surat-aju-banding", response_model=SuratAjuBandingResponse)
 async def surat_aju_banding(request: SuratAjuBandingRequest):
     # Jika nama_perusahaan_asuransi tidak diisi, ambil dari hasil scan asuransi
     nama_perusahaan = request.nama_perusahaan_asuransi
