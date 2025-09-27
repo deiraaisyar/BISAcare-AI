@@ -30,3 +30,4 @@ requests
 Pillow
 google-generativeai==0.8.3
 soundfile>=0.12.1
+pydub

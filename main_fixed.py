@@ -21,6 +21,8 @@ from features_fixed.generate_ajubanding import buat_surat_aju_banding_pdf
 from datetime import datetime
 from features_fixed.diagnosis_text import diagnosis_text_pipeline
 from sentence_transformers import SentenceTransformer
+import tempfile
+from pydub import AudioSegment
 
 app = FastAPI()
 
@@ -41,19 +43,37 @@ ASURANSI_INDEX_PATH = "daftar_asuransi/app/embeddings/asuransi_st.index"
 asuransi_data = load_json(ASURANSI_DATA_PATH)
 asuransi_index = load_faiss_index(ASURANSI_INDEX_PATH)
 
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
+import tempfile
+from pydub import AudioSegment
+
+app = FastAPI()
+
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        # Simpan file original (m4a, wav, dll.)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
 
-        transcription = transcribe_audio(tmp_path)
+        # Konversi ke wav (jika bukan wav)
+        if not tmp_path.endswith(".wav"):
+            audio = AudioSegment.from_file(tmp_path)
+            wav_path = tmp_path + ".wav"
+            audio.export(wav_path, format="wav")
+        else:
+            wav_path = tmp_path
+
+        # Panggil fungsi transkripsi
+        transcription = transcribe_audio(wav_path)
 
         return JSONResponse({"text": transcription})
     
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 
 @app.post("/bisabot")
 async def chat(query: Query):
