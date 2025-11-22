@@ -1,0 +1,91 @@
+{
+  "info": {
+    "name": "BISACare-AI Collection",
+    "_postman_id": "bisa-collection-001",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Generate Surat Aju Banding",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe\",\n  \"policy_number\": \"POL123\",\n  \"claim_number\": \"CLM456\",\n  \"date\": \"2025-11-22\",\n  \"issue_summary\": \"Claim rejected\",\n  \"appeal_reason\": \"Provide missing docs\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/surat-aju-banding",
+          "host": [
+            "{{BASE_URL}}"
+          ],
+          "path": [
+            "surat-aju-banding"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Scan KTP (multipart)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/path/to/ktp.jpg"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/scan-ktp",
+          "host": [
+            "{{BASE_URL}}"
+          ],
+          "path": [
+            "scan-ktp"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Transcribe audio",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/path/to/audio.wav"
+            },
+            {
+              "key": "language",
+              "value": "id",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/transcribe",
+          "host": [
+            "{{BASE_URL}}"
+          ],
+          "path": [
+            "transcribe"
+          ]
+        }
+      }
+    }
+  ]
+}

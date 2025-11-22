@@ -23,6 +23,10 @@ from features_fixed.diagnosis_text import diagnosis_text_pipeline
 from sentence_transformers import SentenceTransformer
 import tempfile
 from pydub import AudioSegment
+from google.cloud import storage
+import os
+import json
+from google.oauth2 import service_account
 
 app = FastAPI()
 
@@ -42,13 +46,6 @@ ASURANSI_INDEX_PATH = "daftar_asuransi/app/embeddings/asuransi_st.index"
 
 asuransi_data = load_json(ASURANSI_DATA_PATH)
 asuransi_index = load_faiss_index(ASURANSI_INDEX_PATH)
-
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import JSONResponse
-import tempfile
-from pydub import AudioSegment
-
-app = FastAPI()
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
@@ -231,10 +228,12 @@ async def surat_aju_banding(request: SuratAjuBandingRequest):
         nama_perusahaan_asuransi=nama_perusahaan,
         nama_file_output=filename
     )
+    # Upload ke GCS setelah file dibuat
+    public_url = upload_to_gcs(filename, GCS_BUCKET_NAME, f"aju-banding/{filename}")
     return SuratAjuBandingResponse(
         message="Surat aju banding berhasil dibuat",
         filename=filename,
-        download_url=f"/download/{filename}"
+        download_url=public_url
     )
 
 @app.get("/download/{filename}")
@@ -245,3 +244,24 @@ async def download_file(filename: str):
 async def diagnosis_text(request: DiagnosisTextRequest):
     result = diagnosis_text_pipeline(request.diagnosis_text)
     return result
+
+GCS_BUCKET_NAME = "aju-banding-pdf-result"  
+
+def get_gcs_client():
+    gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if gac and gac.startswith("{"):
+        creds_info = json.loads(gac)
+        credentials = service_account.Credentials.from_service_account_info(creds_info)
+    elif gac:
+        credentials = service_account.Credentials.from_service_account_file(gac)
+    else:
+        credentials = service_account.Credentials.from_service_account_file("credential.json")
+    return storage.Client(credentials=credentials)
+
+def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> str:
+    client = get_gcs_client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_filename(local_file_path)
+    # Jangan panggil blob.make_public()!
+    return f"https://storage.googleapis.com/{bucket_name}/{destination_blob_name}"
